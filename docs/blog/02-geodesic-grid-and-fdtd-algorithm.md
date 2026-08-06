@@ -2,11 +2,11 @@
 
 A spherical FDTD solver needs more than points distributed over a globe. It needs an oriented topology: edges must have directions, every face must know which way its boundary is traversed, and neighbouring cells must agree on the sign of their shared flux. The metric—lengths and areas—then turns those topological differences and circulations into physical derivatives.
 
-This project builds that structure from an icosahedron and uses it to apply Maxwell's integral laws directly. The result is a staggered three-dimensional method that resembles a Yee scheme, but whose horizontal operators live on a triangular primal mesh and its pentagon–hexagon dual.
+This project builds that structure from an icosahedron and uses it to apply Maxwell's integral laws directly. The result is a staggered three-dimensional method that resembles a Yee scheme, but whose horizontal operators live on a triangular primal mesh and its pentagon–hexagon dual.[^yee-1966][^simpson-heikes-taflove-2006]
 
 ## From an icosahedron to a global grid
 
-An icosahedron begins with 12 vertices, 30 edges, and 20 triangular faces. One subdivision step replaces each triangle by four triangles: the three edge midpoints are created, normalized back onto the unit sphere, and connected. Repeating this process produces an increasingly fine geodesic triangulation.
+An icosahedron begins with 12 vertices, 30 edges, and 20 triangular faces. One subdivision step replaces each triangle by four triangles: the three edge midpoints are created, normalized back onto the unit sphere, and connected. Repeating this process produces an increasingly fine geodesic triangulation.[^randall-2002]
 
 At subdivision level $L$,
 
@@ -16,11 +16,15 @@ N_e=30\cdot4^L,\qquad
 N_f=20\cdot4^L.
 $$
 
-The repository optionally relaxes vertices toward neighbouring face centres and reprojects them onto the sphere, although the default uses no relaxation.
+The repository optionally relaxes vertices toward neighbouring face centres and reprojects them onto the sphere, although the default uses no relaxation.[^mesh-source]
 
-The triangles form the **primal mesh**. A corresponding **dual mesh** is constructed by connecting adjacent triangle centres across each primal edge. A dual cell surrounds every primal vertex. The 12 vertices inherited from the icosahedron have degree five, giving 12 pentagons; all other vertices have degree six, giving hexagons.
+The triangles form the **primal mesh**. A corresponding **dual mesh** is constructed by connecting adjacent triangle centres across each primal edge. A dual cell surrounds every primal vertex. The 12 vertices inherited from the icosahedron have degree five, giving 12 pentagons; all other vertices have degree six, giving hexagons.[^randall-2002][^simpson-heikes-taflove-2006]
 
 The pentagons are not defects accidentally introduced by an implementation. They are topologically necessary. A sphere cannot be tiled entirely by a regular hexagonal network. The 12 degree-five cells supply the curvature needed to close the surface.
+
+![Subdivision-2 geodesic dual grid wrapped around the Earth. Purple cells highlight the topologically required pentagons among the hexagons.](images/geodesic-grid.png)
+
+*The repository's subdivision-2 dual grid. Black lines trace the 162 surface cells; purple highlights identify the visible members of the 12 pentagons, with hexagons everywhere else.*
 
 ```mermaid
 flowchart LR
@@ -77,7 +81,7 @@ et[edge,      radial_half_node]
 hr[triangle,  radial_half_node]
 ```
 
-Electric and magnetic fields are also staggered by half a time step. The scheme first advances magnetic fields from the current electric fields, then advances electric fields from the new magnetic fields. This is the familiar leapfrog structure of the Yee algorithm, adapted to spherical primal–dual surfaces.
+Electric and magnetic fields are also staggered by half a time step. The scheme first advances magnetic fields from the current electric fields, then advances electric fields from the new magnetic fields. This is the familiar leapfrog structure of the Yee algorithm, adapted to spherical primal–dual surfaces.[^yee-1966][^simpson-heikes-taflove-2006]
 
 ```mermaid
 flowchart LR
@@ -116,6 +120,8 @@ flowchart LR
 
 Each expression is an integral Maxwell update divided by its associated length or area.
 
+The local stencils below follow the staggered field placement illustrated in Figures 3 and 4 of Simpson, Heikes, and Taflove (2006), but redraw it in the notation used by this implementation.[^simpson-heikes-taflove-2006] They are explanatory schematics rather than reproductions of the published figures: blue marks electric degrees of freedom, orange marks magnetic degrees of freedom, and the gold ring identifies the value being updated.
+
 ### 1. Tangential magnetic field
 
 The surface gradient of $E_r$ is a head-minus-tail difference divided by the primal edge length. The radial derivative of $E_t$ is evaluated between staggered radial locations. Their difference advances $H_t$:
@@ -125,6 +131,10 @@ H_t^{n+1/2}=H_t^{n-1/2}
 +\frac{\Delta t}{\mu_0}
 \left(\nabla_s E_r^n-\partial_r E_t^n\right).
 $$
+
+![Tangential magnetic update stencil. On the surface, radial electric fields occupy the two primal-edge endpoints while the target tangential magnetic field occupies the crossing dual edge. Radially, tangential electric fields lie on the TE-r planes above and below the target TM-r plane.](images/update-ht-stencil.svg)
+
+*The $H_t$ update combines the surface difference $D_sE_r$ with the radial difference $D_rE_t$ at one primal/dual edge pair.*
 
 At the two radial ends, the zero tangential-electric boundary is incorporated with a one-sided doubled difference.
 
@@ -137,6 +147,10 @@ H_r^{n+1/2}=H_r^{n-1/2}
 -\frac{\Delta t}{\mu_0 A_p}
 \sum_{e\in\partial p}s_{pe}E_{t,e}^n\ell_{p,e}.
 $$
+
+![Radial magnetic update stencil. Three tangential electric fields lie on the oriented edges of a triangular primal face, and the target radial magnetic field lies at its center.](images/update-hr-stencil.svg)
+
+*The $H_r$ update applies the primal-face circulation $C_pE_t$ around one TE-r triangle and divides by its area.*
 
 ### 3. Radial electric field
 
@@ -158,6 +172,10 @@ E_r^{n+1}=C_aE_r^n+C_b
 \left(\frac{1}{A_d}\sum_{e\in\partial d}s_{de}H_{t,e}^{n+1/2}\ell_{d,e}-J_r^{n+1/2}\right).
 $$
 
+![Radial electric update stencil. Tangential magnetic fields circulate around the boundary of a hexagonal dual cell, while radial electric field and source current occupy the dual-cell center. A pentagonal cell uses the same stencil with five boundary fields.](images/update-er-stencil.svg)
+
+*The $E_r$ update applies the dual-cell circulation $C_dH_t$, divides by $A_d$, and subtracts the collocated radial current density $J_r$.*
+
 Both $C_a$ and $C_b$ are precomputed at every electric-field location, so a heterogeneous lossy model does not add branches to the time loop.
 
 ### 4. Tangential electric field
@@ -168,6 +186,10 @@ $$
 E_t^{n+1}=C_aE_t^n+C_b
 \left(\nabla_d H_r^{n+1/2}-\partial_r H_t^{n+1/2}\right).
 $$
+
+![Tangential electric update stencil. On the surface, radial magnetic fields occupy the adjacent left and right triangle centers while the target tangential electric field occupies their shared primal edge. Radially, tangential magnetic fields lie on the TM-r planes above and below the target TE-r plane.](images/update-et-stencil.svg)
+
+*The $E_t$ update combines the dual difference $D_dH_r$ across the edge with the radial difference $D_rH_t$ between neighbouring TM-r planes.*
 
 ## Nonuniform radial spacing
 
@@ -184,7 +206,7 @@ $$
 \sqrt{\ell_{p,\min}^{-2}+\ell_{d,\min}^{-2}+(2/\Delta r_{\min})^2}},
 $$
 
-where $S$ is a user-controlled Courant factor, 0.35 by default. A requested step larger than this estimate is rejected rather than silently producing an unstable run.
+where $S$ is a user-controlled Courant factor, 0.35 by default. A requested step larger than this estimate is rejected rather than silently producing an unstable run.[^solver-source]
 
 This estimate is intentionally conservative. On an irregular grid, quoting only the Cartesian $c\Delta t/\Delta x$ condition would ignore the dual geometry and the radial staggering that actually appear in the update.
 
@@ -196,14 +218,32 @@ $$
 J_{r,i}=\frac{w_i I(t)}{A_{d,i}},\qquad \sum_iw_i=1.
 $$
 
-Dividing by the local dual area converts current to current density, while the normalized weights preserve total current. This matters even more as the grid is refined or made nonuniform: a source definition should describe a physical location, not an array index.
+Dividing by the local dual area converts current to current density, while the normalized weights preserve total current. This matters even more as the grid is refined or made nonuniform: a source definition should describe a physical location, not an array index.[^source-source]
 
 ## What the algorithm gets right—and what remains
 
-The mesh tests verify closed topology, degree-five/degree-six incidence, orientation, and area closure. Solver tests verify stationary zero fields, finite source-driven fields, material damping, exact source moments, nonuniform radial stepping, and rejection of an unstable time step. Cross-backend tests require NumPy and PyTorch double-precision fields to agree after multiple steps.
+The mesh tests verify closed topology, degree-five/degree-six incidence, orientation, and area closure. Solver tests verify stationary zero fields, finite source-driven fields, material damping, exact source moments, nonuniform radial stepping, and rejection of an unstable time step. Cross-backend tests require NumPy and PyTorch double-precision fields to agree after multiple steps.[^repository-tests]
 
-The global validation provides a harder test. Waveform morphology and uniform-model convergence are encouraging, and grid-induced directional asymmetry decreases with refinement. At the paper-scale subdivision-7 grid, the measured maximum directional spread stays below 0.295% over the evaluated band. In the heterogeneous production model, ETOPO5 relief and bounded oceanic/continental profiles restore strong physical east–west nonidentity, but the relative peak ordering still differs from the published Figure 7. Strict pointwise attenuation reproduction also fails: the subdivision-8 production maxima are $2.538\,\mathrm{dB/Mm}$ on A–B and $3.258\,\mathrm{dB/Mm}$ on A′–B′. The error budget therefore includes physical-input uncertainty and finite radial and crustal modelling as well as spatial dispersion—not merely floating-point precision.
+The global validation provides a harder test. Waveform morphology and uniform-model convergence are encouraging, and grid-induced directional asymmetry decreases with refinement. At the paper-scale subdivision-7 grid, the measured maximum directional spread stays below 0.295% over the evaluated band. In the heterogeneous production model, ETOPO5 relief and bounded oceanic/continental profiles restore strong physical east–west nonidentity, but the relative peak ordering still differs from the published Figure 7. Strict pointwise attenuation reproduction also fails: the subdivision-8 production maxima are $2.538\,\mathrm{dB/Mm}$ on A–B and $3.258\,\mathrm{dB/Mm}$ on A′–B′. The error budget therefore includes physical-input uncertainty and finite radial and crustal modelling as well as spatial dispersion—not merely floating-point precision.[^verification-2004]
 
 That is why grid design and validation cannot be separated. A topologically correct update can still be quantitatively under-resolved.
 
 In Part 3, we will translate these operators into NumPy, including the incidence-table technique that makes pentagon and hexagon circulations vectorizable without a Python loop over cells.
+
+## References
+
+[^yee-1966]: K. S. Yee, “Numerical Solution of Initial Boundary Value Problems Involving Maxwell's Equations in Isotropic Media,” *IEEE Transactions on Antennas and Propagation*, 14(3), 302–307, 1966, [doi:10.1109/TAP.1966.1138693](https://doi.org/10.1109/TAP.1966.1138693).
+
+[^randall-2002]: D. A. Randall, T. D. Ringler, R. P. Heikes, P. Jones, and J. Baumgardner, “Climate Modeling with Spherical Geodesic Grids,” *Computing in Science & Engineering*, 4(5), 32–41, 2002, [doi:10.1109/MCISE.2002.1032427](https://doi.org/10.1109/MCISE.2002.1032427).
+
+[^simpson-heikes-taflove-2006]: J. J. Simpson, R. P. Heikes, and A. Taflove, “FDTD Modeling of a Novel ELF Radar for Major Oil Deposits Using a Three-Dimensional Geodesic Grid of the Earth-Ionosphere Waveguide,” *IEEE Transactions on Antennas and Propagation*, 54(6), 1734–1741, 2006, [doi:10.1109/TAP.2006.875504](https://doi.org/10.1109/TAP.2006.875504).
+
+[^mesh-source]: Ionosphere FDTD project, “[Geodesic mesh implementation](../../src/ionosphere_fdtd/mesh.py).”
+
+[^solver-source]: Ionosphere FDTD project, “[Simulation configuration and geometry-aware time-step check](../../src/ionosphere_fdtd/solver.py).”
+
+[^source-source]: Ionosphere FDTD project, “[Spatially weighted source implementation](../../src/ionosphere_fdtd/sources.py).”
+
+[^repository-tests]: Ionosphere FDTD project, [`test_mesh.py`](../../tests/test_mesh.py), [`test_solver.py`](../../tests/test_solver.py), and [`test_backends.py`](../../tests/test_backends.py).
+
+[^verification-2004]: Ionosphere FDTD project, “[Final Simpson–Taflove 2004 Verification Report](../verification/simpson-taflove-2004.md),” production rerun dated 2026-08-06.

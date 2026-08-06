@@ -2,7 +2,7 @@
 
 Most introductions to finite-difference time-domain methods begin with a box. The geometry is Cartesian, the material is simple, and the source is placed wherever it is convenient. That is a good way to learn the update equations, but it hides the reason this project exists: some electromagnetic systems are intrinsically global.
 
-The space between the conducting Earth and the lower ionosphere forms a spherical electromagnetic waveguide. Extremely low frequency (ELF) and very low frequency (VLF) energy can travel through this cavity for thousands of kilometres, repeatedly interacting with the ground, oceans, atmosphere, and ionosphere. A local flat-Earth model can answer local questions. It cannot naturally represent propagation around the planet, antipodal focusing, or two paths that travel east and west around different crustal and oceanic regions.
+The space between the conducting Earth and the lower ionosphere forms a spherical electromagnetic waveguide. Extremely low frequency (ELF) and very low frequency (VLF) energy can travel through this cavity for thousands of kilometres, repeatedly interacting with the ground, oceans, atmosphere, and ionosphere. A local flat-Earth model can answer local questions. It cannot naturally represent propagation around the planet, antipodal focusing, or two paths that travel east and west around different crustal and oceanic regions.[^wait-spies][^simpson-taflove-2004]
 
 This series develops a three-dimensional FDTD model designed for that global problem. Before looking at the grid or the implementation, this first article explains what is being modelled, why it matters, and how the numerical experiment in this repository is assembled.
 
@@ -37,7 +37,7 @@ $$
 \exp\left(\frac{h-H'}{\zeta}\right),
 $$
 
-where the default baseline uses $H'=74\,\mathrm{km}$ and $\zeta=6\,\mathrm{km}$. These parameters are not universal constants. They define a useful baseline that can be replaced without changing the field solver. The verification configuration also provides the sharper daytime profile used in the Simpson–Taflove study, with a 70 km reference height and a 3.33 km scale height.
+where the default baseline uses $H'=74\,\mathrm{km}$ and $\zeta=6\,\mathrm{km}$. These parameters are not universal constants. They define a useful baseline that can be replaced without changing the field solver. The verification configuration also provides the sharper daytime profile used in the Simpson–Taflove study, with a 70 km reference height and a 3.33 km scale height.[^bannister-1985][^simpson-taflove-2004]
 
 That separation is important: Maxwell's equations belong in the solver; uncertain geophysical assumptions belong in a material model.
 
@@ -45,7 +45,7 @@ That separation is important: Maxwell's equations belong in the solver; uncertai
 
 At these frequencies, the wavelength is enormous. A 20 Hz free-space wavelength is about 15,000 km. The Earth itself therefore becomes part of the electromagnetic structure.
 
-This regime is relevant to several classes of engineering and scientific problems:
+This regime is relevant to several classes of engineering and scientific problems documented in Earth–ionosphere propagation and global FDTD studies:[^wait-spies][^simpson-heikes-taflove-2006]
 
 - global ELF propagation and the natural resonances of the Earth–ionosphere cavity;
 - lightning-generated electromagnetic transients and remote sensing;
@@ -71,7 +71,7 @@ flowchart LR
     S["Radial Gaussian current<br/>default altitude: 2.5 km"] --> A
 ```
 
-The horizontal grid covers the entire globe. It is derived from an icosahedron, recursively subdivided, and projected onto the sphere. Its triangular primal mesh and polygonal dual mesh avoid the polar singularity and extreme cell convergence of a latitude–longitude grid. The construction produces exactly 12 pentagonal dual cells and hexagons everywhere else. Part 2 will explain why this primal–dual pairing is especially useful for integral Maxwell updates.
+The horizontal grid covers the entire globe. It is derived from an icosahedron, recursively subdivided, and projected onto the sphere. Its triangular primal mesh and polygonal dual mesh avoid the polar singularity and extreme cell convergence of a latitude–longitude grid. The construction produces exactly 12 pentagonal dual cells and hexagons everywhere else. Part 2 will explain why this primal–dual pairing is especially useful for integral Maxwell updates.[^randall-2002][^simpson-heikes-taflove-2006]
 
 The default source is a localized vertical Gaussian current above Gwangju, Republic of Korea, at $35.1595^\circ$ N, $126.8526^\circ$ E and 2.5 km altitude. Its peak current, width, centre time, location, and optional carrier frequency are configurable. A modulated 20 Hz experiment uses a frequency-scaled Gaussian envelope unless the width is supplied explicitly.
 
@@ -113,15 +113,29 @@ Experiments can inspect a global surface map, a great-circle distance–height s
 
 The project can also render the global field directly on the geodesic mesh. The animation below is a repository-generated example rather than a conceptual illustration.
 
-![Geodesic FDTD field propagating over the Earth](../../artifacts/taflove/fig-3-11-gwangju.gif)
+![Geodesic FDTD field propagating over the Earth](images/taflove-fig-3-11-gwangju.gif)
 
-The strongest repository-level verification follows the global ELF experiment of [Simpson and Taflove (2004)](https://doi.org/10.1109/TAP.2004.823953). The current production comparison uses a complete 35,000-step trace and an ETOPO5-based reconstruction of the paper's unspecified NOAA-NGDC relief input. ETOPO5 is period-appropriate, but the paper does not identify the exact data edition or preprocessing convention, so it cannot be claimed as the authors' original data set.
+<iframe
+  src="https://www.youtube-nocookie.com/embed/MDfjkfOPYKc"
+  title="ELF Waves Around Earth | 3-D Geodesic FDTD Simulation with PyTorch"
+  width="960"
+  height="540"
+  style="width: 100%; aspect-ratio: 16 / 9; border: 0;"
+  loading="lazy"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowfullscreen>
+</iframe>
 
-The rerun reproduces the qualitative temporal morphology: a negative main pulse, positive overshoot, persistent slow tail, correct quarter-arc-before-half-arc arrival ordering, and visible east–west nonidentity. It does not reproduce the published east/west peak ordering and separation. It also fails the strict pointwise attenuation tolerances over 50–500 Hz. The A–B path has a mean absolute error of $1.104\,\mathrm{dB/Mm}$ and a maximum error of $2.538\,\mathrm{dB/Mm}$; A′–B′ has a mean absolute error of $0.242\,\mathrm{dB/Mm}$ and a maximum error of $3.258\,\mathrm{dB/Mm}$. This mixed result distinguishes “the waveform looks plausible” from exact plot reproduction and quantitative agreement.
+*[Watch on YouTube: ELF Waves Around Earth | 3-D Geodesic FDTD Simulation with PyTorch](https://www.youtube.com/watch?v=MDfjkfOPYKc).*
 
-![Published and reproduced temporal receiver responses](../verification/images/simpson-taflove-2004-fig-7-comparison.png)
+The strongest repository-level verification follows the global ELF experiment of Simpson and Taflove (2004).[^simpson-taflove-2004] The current production comparison uses a complete 35,000-step trace and an ETOPO5-based reconstruction of the paper's unspecified NOAA-NGDC relief input. ETOPO5 is period-appropriate, but the paper does not identify the exact data edition or preprocessing convention, so it cannot be claimed as the authors' original data set.[^verification-2004]
 
-![Published and reproduced spectral attenuation](../verification/images/simpson-taflove-2004-fig-8-comparison.png)
+The rerun reproduces the qualitative temporal morphology: a negative main pulse, positive overshoot, persistent slow tail, correct quarter-arc-before-half-arc arrival ordering, and visible east–west nonidentity. It does not reproduce the published east/west peak ordering and separation. It also fails the strict pointwise attenuation tolerances over 50–500 Hz. The A–B path has a mean absolute error of $1.104\,\mathrm{dB/Mm}$ and a maximum error of $2.538\,\mathrm{dB/Mm}$; A′–B′ has a mean absolute error of $0.242\,\mathrm{dB/Mm}$ and a maximum error of $3.258\,\mathrm{dB/Mm}$. This mixed result distinguishes “the waveform looks plausible” from exact plot reproduction and quantitative agreement.[^verification-2004]
+
+![Published and reproduced temporal receiver responses](images/simpson-taflove-2004-fig-7-comparison.png)
+
+![Published and reproduced spectral attenuation](images/simpson-taflove-2004-fig-8-comparison.png)
 
 ## A small run and a paper-scale run
 
@@ -133,7 +147,7 @@ uv run ionosphere --subdivision 2 --radial-cells 24 --steps 200
 
 It uses 162 surface cells and is useful for checking setup, field layout, and visualization. It is not a quantitatively resolved Earth model.
 
-The verification study is much larger. Its convergence and directional-dispersion runs cover subdivisions 6–8 and commonly use 25,023 updates. The authoritative complete-time production comparison uses subdivision 8, 40 radial cells spanning $-100$ to $+100$ km, a $3\,\mu\mathrm{s}$ step, and 35,000 updates. The subdivision-7 grid has 163,842 cells per radial plane, matching the scale reported in the reference study; the production grid has 655,362 surface cells and uses compiled CUDA in double precision.
+The verification study is much larger. Its convergence and directional-dispersion runs cover subdivisions 6–8 and commonly use 25,023 updates. The authoritative complete-time production comparison uses subdivision 8, 40 radial cells spanning $-100$ to $+100$ km, a $3\,\mu\mathrm{s}$ step, and 35,000 updates. The subdivision-7 grid has 163,842 cells per radial plane, matching the scale reported in the reference study; the production grid has 655,362 surface cells and uses compiled CUDA in double precision.[^simpson-taflove-2004][^verification-2004]
 
 This enormous gap between a smoke test and a production experiment is typical of wave simulation. Correctness is developed at small scale, but dispersion and attenuation claims must be made at the scale where the relevant wavelengths and material structures are resolved.
 
@@ -149,3 +163,17 @@ The current project should be read as a numerical laboratory with explicit assum
 6. Validation includes convergence and receiver-based comparisons, not only images.
 
 That contract gives us a concrete target for the rest of the series. In Part 2, we will turn the planet into a computable mesh and derive the actual geodesic FDTD update. Parts 3 and 4 will then show how the same numerical algorithm is expressed efficiently in NumPy and PyTorch.
+
+## References
+
+[^wait-spies]: J. R. Wait and K. P. Spies, *Characteristics of the Earth-Ionosphere Waveguide for VLF Radio Waves*, NBS Technical Note 300, 1964, [doi:10.6028/NBS.TN.300](https://doi.org/10.6028/NBS.TN.300).
+
+[^simpson-taflove-2004]: J. J. Simpson and A. Taflove, “Three-Dimensional FDTD Modeling of Impulsive ELF Propagation About the Earth-Sphere,” *IEEE Transactions on Antennas and Propagation*, 52(2), 443–451, 2004, [doi:10.1109/TAP.2004.823953](https://doi.org/10.1109/TAP.2004.823953).
+
+[^bannister-1985]: P. R. Bannister, “The Determination of Representative Ionospheric Conductivity Parameters for ELF Propagation in the Earth-Ionosphere Waveguide,” *Radio Science*, 20(4), 977–984, 1985, [doi:10.1029/RS020i004p00977](https://doi.org/10.1029/RS020i004p00977).
+
+[^randall-2002]: D. A. Randall, T. D. Ringler, R. P. Heikes, P. Jones, and J. Baumgardner, “Climate Modeling with Spherical Geodesic Grids,” *Computing in Science & Engineering*, 4(5), 32–41, 2002, [doi:10.1109/MCISE.2002.1032427](https://doi.org/10.1109/MCISE.2002.1032427).
+
+[^simpson-heikes-taflove-2006]: J. J. Simpson, R. P. Heikes, and A. Taflove, “FDTD Modeling of a Novel ELF Radar for Major Oil Deposits Using a Three-Dimensional Geodesic Grid of the Earth-Ionosphere Waveguide,” *IEEE Transactions on Antennas and Propagation*, 54(6), 1734–1741, 2006, [doi:10.1109/TAP.2006.875504](https://doi.org/10.1109/TAP.2006.875504).
+
+[^verification-2004]: Ionosphere FDTD project, “[Final Simpson–Taflove 2004 Verification Report](../verification/simpson-taflove-2004.md),” production rerun dated 2026-08-06.

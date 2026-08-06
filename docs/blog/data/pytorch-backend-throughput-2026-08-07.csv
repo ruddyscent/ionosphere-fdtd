@@ -1,0 +1,5 @@
+implementation,device,mode,threads,dtype,subdivision,radial_cells,courant_factor,batch_steps,run_1_elapsed_s,run_2_elapsed_s,run_3_elapsed_s,run_4_elapsed_s,run_5_elapsed_s,median_steps_per_s,speedup_vs_numpy
+NumPy,CPU,eager,default,float64,4,24,0.2,200,2.551520182,2.564999265,2.595358523,2.589759738,2.582803867,77.435226,1.000000
+PyTorch,CPU,eager,4,float64,4,24,0.2,200,0.726798447,0.728736673,0.764980414,0.806727565,0.767729762,261.444602,3.376300647
+PyTorch,NVIDIA GeForce RTX 3060,eager,N/A,float64,4,24,0.2,200,0.214005577,0.256380256,0.214134667,0.211872992,0.212028570,934.555084,12.068862423
+PyTorch,NVIDIA GeForce RTX 3060,compiled,N/A,float64,4,24,0.2,200,0.050264395,0.049266497,0.049201485,0.049394666,0.047552584,4059.553897,52.425157523

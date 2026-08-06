@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="470" viewBox="0 0 1000 470" role="img" aria-labelledby="title desc">
+  <title id="title">Radial electric-field update stencil</title>
+  <desc id="desc">A hexagonal dual cell on a TM-r plane, with tangential magnetic field on its oriented boundary, radial electric field at the cell center, and radial source current collocated with it.</desc>
+  <defs>
+    <marker id="arrow-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c2410c"/></marker>
+    <marker id="arrow-grid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker>
+    <style>
+      text { font-family: Inter, "DejaVu Sans", sans-serif; fill: #172033; }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 2; }
+      .cell { fill: #fff7ed; stroke: #334155; stroke-width: 4; }
+      .h { fill: none; stroke: #c2410c; stroke-width: 6; marker-end: url(#arrow-h); }
+      .target { fill: #fef3c7; stroke: #f59e0b; stroke-width: 4; }
+      .heading { font-size: 25px; font-weight: 700; }
+      .label { font-size: 20px; font-weight: 600; }
+      .small { font-size: 17px; }
+      .op { font-size: 21px; font-weight: 700; fill: #475569; }
+    </style>
+  </defs>
+  <rect width="1000" height="470" fill="white"/>
+  <text x="34" y="40" class="heading">3. Update E_r at the center of a dual cell</text>
+  <rect x="25" y="62" width="950" height="335" rx="14" class="panel"/>
+  <text x="48" y="94" class="label">TM-r plane r_i: oriented circulation of H_t around a pentagon or hexagon</text>
+
+  <polygon points="375,122 625,122 745,230 625,338 375,338 255,230" class="cell"/>
+  <line x1="405" y1="122" x2="586" y2="122" class="h"/>
+  <line x1="650" y1="144" x2="722" y2="209" class="h"/>
+  <line x1="722" y1="251" x2="650" y2="316" class="h"/>
+  <line x1="595" y1="338" x2="414" y2="338" class="h"/>
+  <line x1="350" y1="316" x2="278" y2="251" class="h"/>
+  <line x1="278" y1="209" x2="350" y2="144" class="h"/>
+  <text x="430" y="112" class="label" fill="#c2410c">H_t ℓ_d</text>
+  <text x="680" y="179" class="label" fill="#c2410c">H_t</text>
+  <text x="680" y="304" class="label" fill="#c2410c">H_t</text>
+  <text x="430" y="372" class="label" fill="#c2410c">H_t ℓ_d</text>
+  <text x="264" y="179" class="label" fill="#c2410c">H_t</text>
+  <text x="264" y="304" class="label" fill="#c2410c">H_t</text>
+
+  <circle cx="500" cy="230" r="34" class="target"/>
+  <circle cx="500" cy="230" r="7" fill="#2563eb"/>
+  <circle cx="500" cy="230" r="17" fill="none" stroke="#2563eb" stroke-width="3"/>
+  <text x="525" y="220" class="label" fill="#2563eb">target E_r</text>
+  <text x="525" y="246" class="small">dual-cell area A_d</text>
+  <line x1="500" y1="292" x2="500" y2="257" stroke="#7c3aed" stroke-width="5" marker-end="url(#arrow-grid)"/>
+  <text x="518" y="294" class="label" fill="#7c3aed">J_r collocated</text>
+
+  <path d="M 811 147 C 866 197, 866 275, 811 325" fill="none" stroke="#475569" stroke-width="3" marker-end="url(#arrow-grid)"/>
+  <text x="837" y="244" class="op">C_d H_t</text>
+  <text x="75" y="160" class="small">six edges shown;</text>
+  <text x="75" y="183" class="small">a pentagon uses five</text>
+  <line x1="200" y1="189" x2="272" y2="213" stroke="#475569" stroke-width="2" marker-end="url(#arrow-grid)"/>
+
+  <circle cx="37" cy="432" r="10" class="target"/><text x="55" y="439" class="small">updated degree of freedom</text>
+  <line x1="310" y1="432" x2="355" y2="432" class="h"/><text x="368" y="439" class="small">magnetic circulation input</text>
+  <circle cx="662" cy="432" r="7" fill="#2563eb"/><circle cx="662" cy="432" r="15" fill="none" stroke="#2563eb" stroke-width="2"/><text x="688" y="439" class="small">radial electric field</text>
+</svg>

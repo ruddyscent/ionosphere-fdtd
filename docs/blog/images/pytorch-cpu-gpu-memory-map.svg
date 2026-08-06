@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">CPU and GPU memory maps for the PyTorch FDTD solver</title>
+  <desc id="desc">A comparison showing CPU tensors and kernels sharing host memory, while the GPU path initializes device-resident topology, fields, and source samples once, performs the time loop on the device, and copies back only requested observations.</desc>
+  <defs>
+    <linearGradient id="cpu-panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7fbff"/>
+      <stop offset="1" stop-color="#eef5fb"/>
+    </linearGradient>
+    <linearGradient id="gpu-panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbf9ff"/>
+      <stop offset="1" stop-color="#f2effb"/>
+    </linearGradient>
+    <marker id="arrow-blue" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#2878a8"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#7453a6"/>
+    </marker>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .panel-title { font: 700 21px Inter, ui-sans-serif, system-ui, sans-serif; fill: #1c2b3a; }
+      .section { font: 700 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #26384a; }
+      .label { font: 600 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #26384a; }
+      .small { font: 400 12.5px Inter, ui-sans-serif, system-ui, sans-serif; fill: #4f6172; }
+      .tiny { font: 400 11.5px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5a6878; }
+      .badge { font: 700 12.5px Inter, ui-sans-serif, system-ui, sans-serif; }
+      .summary-head { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #1f3348; }
+      .summary-body { font: 400 12.5px Inter, ui-sans-serif, system-ui, sans-serif; fill: #4b5d6f; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="760" fill="#ffffff"/>
+  <text class="title" x="40" y="43">Where the tensors live during a PyTorch FDTD run</text>
+  <text class="subtitle" x="40" y="69">Both paths are already vectorized; this map shows the next layer: residency, execution, and synchronization.</text>
+
+  <!-- CPU path -->
+  <rect x="40" y="94" width="350" height="492" rx="18" fill="url(#cpu-panel)" stroke="#9cb9cf" stroke-width="2"/>
+  <text class="panel-title" x="64" y="127">CPU execution</text>
+  <rect x="63" y="145" width="304" height="326" rx="13" fill="#ffffff" stroke="#aac3d5" stroke-width="1.5"/>
+  <text class="section" x="83" y="174">CPU RAM · one address space</text>
+
+  <rect x="82" y="192" width="266" height="70" rx="9" fill="#e8f3fa" stroke="#83abc4"/>
+  <text class="label" x="98" y="216">Static tensors</text>
+  <text class="small" x="98" y="238">topology · geometry · materials</text>
+  <text class="small" x="98" y="255">coefficients</text>
+
+  <rect x="82" y="276" width="266" height="70" rx="9" fill="#e1f3ef" stroke="#72ad9f"/>
+  <text class="label" x="98" y="300">Mutable field state</text>
+  <text class="small" x="98" y="322">E_r · E_t · H_r · H_t</text>
+
+  <rect x="82" y="360" width="266" height="83" rx="9" fill="#f7f1df" stroke="#c8a85b"/>
+  <text class="label" x="98" y="384">Source and observations</text>
+  <text class="small" x="98" y="406">source-current samples · trace buffers</text>
+  <text class="small" x="98" y="425">NumPy output is already host-accessible</text>
+
+  <rect x="86" y="493" width="258" height="55" rx="11" fill="#dcecf7" stroke="#518eB4" stroke-width="1.5"/>
+  <text class="label" x="215" y="516" text-anchor="middle">CPU kernels</text>
+  <text class="small" x="215" y="536" text-anchor="middle">eager or compiled update</text>
+  <path d="M128 471 L128 491" stroke="#2878a8" stroke-width="2.2" marker-end="url(#arrow-blue)"/>
+  <path d="M302 493 L302 473" stroke="#2878a8" stroke-width="2.2" marker-end="url(#arrow-blue)"/>
+  <rect x="115" y="558" width="200" height="20" rx="10" fill="#d9f0e8"/>
+  <text class="badge" x="215" y="572" text-anchor="middle" fill="#27735f">0 host-device transfers</text>
+
+  <!-- GPU path -->
+  <rect x="416" y="94" width="744" height="492" rx="18" fill="url(#gpu-panel)" stroke="#b6a6d2" stroke-width="2"/>
+  <text class="panel-title" x="440" y="127">GPU execution</text>
+
+  <rect x="440" y="145" width="210" height="365" rx="13" fill="#ffffff" stroke="#b8c4cf" stroke-width="1.5"/>
+  <text class="section" x="460" y="174">Host · CPU RAM</text>
+  <rect x="460" y="192" width="170" height="72" rx="9" fill="#f0f3f6" stroke="#aeb9c4"/>
+  <text class="label" x="475" y="216">Python control</text>
+  <text class="small" x="475" y="238">configuration · counters</text>
+  <text class="small" x="475" y="255">diagnostic scheduling</text>
+
+  <rect x="460" y="282" width="170" height="75" rx="9" fill="#e8f3fa" stroke="#83abc4"/>
+  <text class="label" x="475" y="306">Initialization data</text>
+  <text class="small" x="475" y="328">mesh · material arrays</text>
+  <text class="small" x="475" y="347">source model</text>
+
+  <rect x="460" y="402" width="170" height="82" rx="9" fill="#f7f1df" stroke="#c8a85b"/>
+  <text class="label" x="475" y="426">Requested output</text>
+  <text class="small" x="475" y="448">sampled traces · frames</text>
+  <text class="small" x="475" y="467">final NumPy arrays</text>
+
+  <rect x="692" y="145" width="444" height="365" rx="13" fill="#ffffff" stroke="#a38bc5" stroke-width="1.5"/>
+  <text class="section" x="712" y="174">GPU device memory</text>
+
+  <rect x="712" y="192" width="188" height="72" rx="9" fill="#eee8f8" stroke="#947bb8"/>
+  <text class="label" x="727" y="216">Static tensors</text>
+  <text class="small" x="727" y="238">topology (int64) · geometry</text>
+  <text class="small" x="727" y="255">materials · coefficients</text>
+
+  <rect x="922" y="192" width="194" height="72" rx="9" fill="#e1f3ef" stroke="#72ad9f"/>
+  <text class="label" x="937" y="216">Mutable field state</text>
+  <text class="small" x="937" y="238">E_r · E_t · H_r · H_t</text>
+  <text class="small" x="937" y="255">updated in place each step</text>
+
+  <rect x="712" y="280" width="188" height="62" rx="9" fill="#f7f1df" stroke="#c8a85b"/>
+  <text class="label" x="727" y="304">Source-current batch</text>
+  <text class="small" x="727" y="326">device tensor in compiled runs</text>
+
+  <rect x="712" y="363" width="404" height="108" rx="11" fill="#e9e2f5" stroke="#7453a6" stroke-width="1.6"/>
+  <text class="label" x="914" y="389" text-anchor="middle">Repeated device-only time step</text>
+  <text class="small" x="914" y="412" text-anchor="middle">magnetic update → electric update → next step</text>
+  <text class="small" x="914" y="434" text-anchor="middle">eager kernels or torch.compile fixed-shape graph</text>
+  <path d="M1087 444 C1126 444 1128 383 1090 383" fill="none" stroke="#7453a6" stroke-width="2.2" marker-end="url(#arrow-purple)"/>
+  <text class="badge" x="1058" y="462" text-anchor="end" fill="#654394">N time steps</text>
+
+  <path d="M650 318 C672 318 674 228 710 228" fill="none" stroke="#2878a8" stroke-width="2.3" marker-end="url(#arrow-blue)"/>
+  <text class="tiny" x="670" y="306" text-anchor="middle" fill="#2878a8">one-time</text>
+  <path d="M712 442 C674 442 674 443 632 443" fill="none" stroke="#b58628" stroke-width="2.3" stroke-dasharray="6 5" marker-end="url(#arrow-purple)"/>
+  <text class="tiny" x="670" y="431" text-anchor="middle" fill="#9a741f">on demand</text>
+  <path d="M806 264 L806 361" stroke="#7453a6" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <path d="M1018 264 L1018 361" stroke="#7453a6" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <path d="M849 342 L849 361" stroke="#7453a6" stroke-width="2" marker-end="url(#arrow-purple)"/>
+
+  <rect x="650" y="526" width="456" height="43" rx="10" fill="#f3e8e7" stroke="#c5857e"/>
+  <text class="label" x="674" y="551" fill="#8f4842">Avoided:</text>
+  <text class="small" x="750" y="551">full-field copies or per-step synchronization</text>
+  <path d="M1070 538 L1088 556 M1088 538 L1070 556" stroke="#a94f47" stroke-width="2.5"/>
+
+  <!-- Optimization summary -->
+  <rect x="40" y="610" width="1120" height="118" rx="16" fill="#f6f8fa" stroke="#cbd5df"/>
+  <line x1="413" y1="630" x2="413" y2="709" stroke="#d3dce5"/>
+  <line x1="786" y1="630" x2="786" y2="709" stroke="#d3dce5"/>
+
+  <circle cx="70" cy="645" r="13" fill="#2878a8"/>
+  <text x="70" y="650" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="#fff">1</text>
+  <text class="summary-head" x="92" y="649">Establish residency once</text>
+  <text class="summary-body" x="70" y="676">Keep topology, coefficients, source samples,</text>
+  <text class="summary-body" x="70" y="696">and mutable fields next to the update kernels.</text>
+
+  <circle cx="443" cy="645" r="13" fill="#7453a6"/>
+  <text x="443" y="650" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="#fff">2</text>
+  <text class="summary-head" x="465" y="649">Optimize the repeated graph</text>
+  <text class="summary-body" x="443" y="676">Static shapes let torch.compile specialize the</text>
+  <text class="summary-body" x="443" y="696">tensor-only step when warm-up can be amortized.</text>
+
+  <circle cx="816" cy="645" r="13" fill="#b58628"/>
+  <text x="816" y="650" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="#fff">3</text>
+  <text class="summary-head" x="838" y="649">Control synchronization</text>
+  <text class="summary-body" x="816" y="676">Copy sampled traces, frames, or final state only</text>
+  <text class="summary-body" x="816" y="696">when the host actually needs to inspect them.</text>
+
+  <text class="tiny" x="1160" y="750" text-anchor="end">MPS can use unified physical memory; device residency still controls execution and synchronization.</text>
+</svg>

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="470" viewBox="0 0 1000 470" role="img" aria-labelledby="title desc">
+  <title id="title">Radial magnetic-field update stencil</title>
+  <desc id="desc">A triangular primal face on a TE-r plane, with tangential electric field on its three oriented edges and radial magnetic field at the face center.</desc>
+  <defs>
+    <marker id="arrow-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/></marker>
+    <marker id="arrow-grid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker>
+    <style>
+      text { font-family: Inter, "DejaVu Sans", sans-serif; fill: #172033; }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 2; }
+      .triangle { fill: #eff6ff; stroke: #334155; stroke-width: 4; }
+      .e { fill: none; stroke: #2563eb; stroke-width: 6; marker-end: url(#arrow-e); }
+      .target { fill: #fef3c7; stroke: #f59e0b; stroke-width: 4; }
+      .heading { font-size: 25px; font-weight: 700; }
+      .label { font-size: 20px; font-weight: 600; }
+      .small { font-size: 17px; }
+      .op { font-size: 21px; font-weight: 700; fill: #475569; }
+    </style>
+  </defs>
+  <rect width="1000" height="470" fill="white"/>
+  <text x="34" y="40" class="heading">2. Update H_r at the center of a primal triangle</text>
+  <rect x="25" y="62" width="950" height="335" rx="14" class="panel"/>
+  <text x="48" y="94" class="label">TE-r plane r_i+1/2: oriented circulation of E_t around one primal face</text>
+
+  <polygon points="500,118 282,334 718,334" class="triangle"/>
+  <line x1="465" y1="153" x2="335" y2="281" class="e"/>
+  <line x1="350" y1="334" x2="624" y2="334" class="e"/>
+  <line x1="683" y1="299" x2="547" y2="164" class="e"/>
+  <text x="340" y="202" class="label" fill="#2563eb">E_t,1 ℓ_p,1</text>
+  <text x="445" y="368" class="label" fill="#2563eb">E_t,2 ℓ_p,2</text>
+  <text x="621" y="205" class="label" fill="#2563eb">E_t,3 ℓ_p,3</text>
+
+  <circle cx="500" cy="263" r="31" class="target"/>
+  <circle cx="500" cy="263" r="7" fill="#c2410c"/>
+  <circle cx="500" cy="263" r="17" fill="none" stroke="#c2410c" stroke-width="3"/>
+  <text x="525" y="256" class="label" fill="#c2410c">target H_r</text>
+  <text x="525" y="280" class="small">radial, at face center</text>
+
+  <path d="M 785 146 C 850 195, 850 290, 785 338" fill="none" stroke="#475569" stroke-width="3" marker-end="url(#arrow-grid)"/>
+  <text x="816" y="246" class="op">C_p E_t</text>
+  <text x="89" y="175" class="small">all three E_t samples</text>
+  <text x="89" y="198" class="small">lie on triangle edges</text>
+  <line x1="224" y1="205" x2="322" y2="250" stroke="#475569" stroke-width="2" marker-end="url(#arrow-grid)"/>
+
+  <circle cx="37" cy="432" r="10" class="target"/><text x="55" y="439" class="small">updated degree of freedom</text>
+  <line x1="310" y1="432" x2="355" y2="432" class="e"/><text x="368" y="439" class="small">electric circulation input</text>
+  <circle cx="648" cy="432" r="7" fill="#c2410c"/><circle cx="648" cy="432" r="15" fill="none" stroke="#c2410c" stroke-width="2"/><text x="674" y="439" class="small">radial magnetic field</text>
+</svg>

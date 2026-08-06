@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600" role="img" aria-labelledby="title desc">
+  <title id="title">Measured NumPy and PyTorch FDTD throughput</title>
+  <desc id="desc">A logarithmic lollipop chart comparing median steady-state throughput. NumPy CPU reaches 77.4 steps per second, PyTorch CPU 261.4, PyTorch CUDA eager 934.6, and PyTorch CUDA compiled 4059.6.</desc>
+  <defs>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .row-main { font: 700 16px Inter, ui-sans-serif, system-ui, sans-serif; fill: #243548; }
+      .row-sub { font: 400 12.5px Inter, ui-sans-serif, system-ui, sans-serif; fill: #647487; }
+      .tick { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #607183; }
+      .value { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; }
+      .badge { font: 700 12px Inter, ui-sans-serif, system-ui, sans-serif; }
+      .note { font: 400 12.5px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5c6d7f; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="600" fill="#ffffff"/>
+  <text class="title" x="42" y="46">Same vectorized solver, different execution throughput</text>
+  <text class="subtitle" x="42" y="72">Subdivision 4 · 24 radial cells · float64 · median of five synchronized 200-step batches</text>
+
+  <rect x="28" y="96" width="1144" height="423" rx="18" fill="#f8fafc" stroke="#d1dae3"/>
+
+  <!-- Logarithmic throughput grid: 50 to 5000 steps/s -->
+  <text class="row-sub" x="300" y="125">steady-state throughput (steps/s, logarithmic scale)</text>
+  <line x1="300" y1="143" x2="300" y2="486" stroke="#b8c5d1" stroke-width="1.5"/>
+  <line x1="420" y1="143" x2="420" y2="486" stroke="#d9e0e7"/>
+  <line x1="541" y1="143" x2="541" y2="486" stroke="#d9e0e7"/>
+  <line x1="700" y1="143" x2="700" y2="486" stroke="#d9e0e7"/>
+  <line x1="820" y1="143" x2="820" y2="486" stroke="#d9e0e7"/>
+  <line x1="941" y1="143" x2="941" y2="486" stroke="#d9e0e7"/>
+  <line x1="1100" y1="143" x2="1100" y2="486" stroke="#b8c5d1" stroke-width="1.5"/>
+  <text class="tick" x="300" y="505" text-anchor="middle">50</text>
+  <text class="tick" x="420" y="505" text-anchor="middle">100</text>
+  <text class="tick" x="541" y="505" text-anchor="middle">200</text>
+  <text class="tick" x="700" y="505" text-anchor="middle">500</text>
+  <text class="tick" x="820" y="505" text-anchor="middle">1,000</text>
+  <text class="tick" x="941" y="505" text-anchor="middle">2,000</text>
+  <text class="tick" x="1100" y="505" text-anchor="middle">5,000</text>
+
+  <!-- NumPy CPU -->
+  <text class="row-main" x="55" y="174">NumPy CPU</text>
+  <text class="row-sub" x="55" y="195">vectorized · eager</text>
+  <line x1="300" y1="184" x2="376" y2="184" stroke="#3982b5" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="376" cy="184" r="10" fill="#2878a8" stroke="#ffffff" stroke-width="3"/>
+  <text class="value" x="394" y="180" fill="#246f9c">77.4</text>
+  <rect x="394" y="188" width="67" height="21" rx="10.5" fill="#deedf6"/>
+  <text class="badge" x="427.5" y="203" text-anchor="middle" fill="#286f9a">baseline</text>
+
+  <!-- PyTorch CPU -->
+  <text class="row-main" x="55" y="264">PyTorch CPU</text>
+  <text class="row-sub" x="55" y="285">eager · 4 intra-op threads</text>
+  <line x1="300" y1="274" x2="587" y2="274" stroke="#45a18c" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="587" cy="274" r="10" fill="#318b77" stroke="#ffffff" stroke-width="3"/>
+  <text class="value" x="605" y="270" fill="#287d6b">261.4</text>
+  <rect x="605" y="278" width="58" height="21" rx="10.5" fill="#dff1ec"/>
+  <text class="badge" x="634" y="293" text-anchor="middle" fill="#287d6b">3.38×</text>
+
+  <!-- PyTorch CUDA eager -->
+  <text class="row-main" x="55" y="354">PyTorch CUDA</text>
+  <text class="row-sub" x="55" y="375">RTX 3060 · eager</text>
+  <line x1="300" y1="364" x2="809" y2="364" stroke="#9071bd" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="809" cy="364" r="10" fill="#7453a6" stroke="#ffffff" stroke-width="3"/>
+  <text class="value" x="827" y="360" fill="#684695">934.6</text>
+  <rect x="827" y="368" width="66" height="21" rx="10.5" fill="#ece6f5"/>
+  <text class="badge" x="860" y="383" text-anchor="middle" fill="#684695">12.07×</text>
+
+  <!-- PyTorch CUDA compiled -->
+  <text class="row-main" x="55" y="444">PyTorch CUDA</text>
+  <text class="row-sub" x="55" y="465">RTX 3060 · torch.compile</text>
+  <line x1="300" y1="454" x2="1064" y2="454" stroke="#d19a35" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="1064" cy="454" r="10" fill="#b9821f" stroke="#ffffff" stroke-width="3"/>
+  <text class="value" x="1046" y="430" text-anchor="end" fill="#9b6c18">4,059.6</text>
+  <rect x="1052" y="418" width="67" height="21" rx="10.5" fill="#f6ead1"/>
+  <text class="badge" x="1085.5" y="433" text-anchor="middle" fill="#946615">52.43×</text>
+
+  <rect x="42" y="538" width="1116" height="40" rx="12" fill="#eef3f7"/>
+  <text class="note" x="62" y="563">Intel i7-6700 + NVIDIA RTX 3060 · initialization and compilation warm-up excluded · higher is better</text>
+  <text class="note" x="1138" y="563" text-anchor="end">Measured 2026-08-07</text>
+</svg>
