@@ -26,15 +26,9 @@ The pentagons are not defects accidentally introduced by an implementation. They
 
 *The repository's subdivision-2 dual grid. Black lines trace the 162 surface cells; purple highlights identify the visible members of the 12 pentagons, with hexagons everywhere else.*
 
-```mermaid
-flowchart LR
-    I["Icosahedron<br/>12 vertices, 20 faces"]
-    S["Bisect every edge<br/>four child triangles per face"]
-    P["Project new vertices<br/>onto the unit sphere"]
-    T["Triangular primal mesh"]
-    D["Pentagon–hexagon dual mesh<br/>12 pentagons, otherwise hexagons"]
-    I --> S --> P --> T --> D
-```
+![Four-stage construction of the geodesic grid from an icosahedron through triangle subdivision and spherical projection to the pentagon–hexagon dual mesh](images/geodesic-grid-construction.svg)
+
+*Subdivision and projection create the triangular primal mesh. Connecting adjacent primal-face centres creates one dual cell around every primal vertex; degree five produces a pentagon and degree six a hexagon.*
 
 ## Topology first, metric second
 
@@ -57,13 +51,9 @@ where $\theta_p$ and $\theta_d$ are primal and dual central angles and $\Omega$ 
 
 This separation between incidence and metric is one of the design's most useful ideas. Connectivity is built once. The same angular mesh can then be evaluated at every radial plane simply by multiplying by that plane's radius.
 
-```mermaid
-flowchart TB
-    Vt["tail vertex"] -- "positive primal edge" --> Vh["head vertex"]
-    Fr["right face"] -- "positive dual edge" --> Fl["left face"]
-    Vt --- X["primal/dual crossing"] --- Vh
-    Fr --- X --- Fl
-```
+![Directed primal edge from tail to head crossed by the positive dual edge from the right face to the left face, alongside the separation between incidence operators and spherical metric factors](images/primal-dual-orientation-metric.svg)
+
+*The directed crossing fixes head-minus-tail and left-minus-right signs. Integer incidence tables can therefore be reused on every shell, while radius-dependent arc lengths and areas supply the physical scale.*
 
 ## Where the fields live
 
@@ -83,14 +73,9 @@ hr[triangle,  radial_half_node]
 
 Electric and magnetic fields are also staggered by half a time step. The scheme first advances magnetic fields from the current electric fields, then advances electric fields from the new magnetic fields. This is the familiar leapfrog structure of the Yee algorithm, adapted to spherical primal–dual surfaces.[^yee-1966][^simpson-heikes-taflove-2006]
 
-```mermaid
-flowchart LR
-    TM0["TM-r plane at rᵢ<br/>Eᵣ on dual cells<br/>Hₜ on edges"]
-    TE["TE-r plane at rᵢ₊½<br/>Hᵣ on triangles<br/>Eₜ on edges"]
-    TM1["TM-r plane at rᵢ₊₁<br/>Eᵣ on dual cells<br/>Hₜ on edges"]
-    TM0 <-->|"Δrᵢ / 2"| TE
-    TE <-->|"Δrᵢ / 2"| TM1
-```
+![Schematic of alternating TM-r and TE-r spherical planes with Er, Ht, Hr, and Et locations, paired with the leapfrog sequence of electric integer times and magnetic half times](images/radial-temporal-staggering.svg)
+
+*Spatial and temporal staggering solve different alignment problems. Radial midpoint fields make $D_r$ land on the opposite plane type, while half-time magnetic fields let Faraday and Ampère updates alternate without solving a simultaneous system.*
 
 ## The four update equations
 
@@ -195,7 +180,7 @@ $$
 
 The surface topology is shared by all layers, but radial nodes do not have to be uniform. Differences of $E_t$ at an interior TM-r plane are divided by the distance between neighbouring radial midpoints. Differences of $H_t$ on a TE-r plane are divided by the corresponding full radial-cell width.
 
-This lets the grid resolve a thin near-surface anomaly with 1.25 km cells while retaining much larger cells far from sea level. It also creates a stability consequence: the smallest radial interval limits the global time step.
+This lets the grid resolve a thin near-surface anomaly with 1.25 km cells while retaining much larger cells far from sea level. The radial-stack diagram above remains valid when neighbouring $\Delta r_i$ differ. Nonuniform spacing also creates a stability consequence: the smallest radial interval limits the global time step.
 
 ## A geometry-aware Courant limit
 
@@ -212,13 +197,20 @@ This estimate is intentionally conservative. On an irregular grid, quoting only 
 
 ## Source injection without grid snapping
 
-The radial-current source is evaluated at the half-time step. Spatially, it is distributed over the three vertices of the containing triangle. Radially, it is split between adjacent $E_r$ planes. If $w_i$ are the combined weights, the injected density at degree of freedom $i$ is
+The radial-current source is evaluated at the half-time step. Spatially, it is distributed over the three vertices of the containing triangle using barycentric weights $\lambda_0,\lambda_1,\lambda_2$. Radially, linear weights $1-\alpha$ and $\alpha$ represent its exact altitude on adjacent $E_r$ planes. Their outer product produces at most six combined weights $w_i$ with $\sum_i w_i=1$.[^source-source]
+
+![Source distribution diagram showing three barycentric surface weights, two linear radial weights, their six combined Er degrees of freedom, and preservation of the current element moment](images/source-staggered-distribution.svg)
+
+*The source stencil follows the physical location rather than the nearest vertex or radial plane. A source exactly on a radial plane uses only the three surface vertices.*
+
+For a vertical current element of length $\ell_s$, the injected volume-current density at degree of freedom $i$ is
 
 $$
-J_{r,i}=\frac{w_i I(t)}{A_{d,i}},\qquad \sum_iw_i=1.
+J_{r,i}=\frac{w_i I(t)\ell_s}{A_{d,i}\,\Delta r_{c,i}},\qquad
+\sum_i J_{r,i}A_{d,i}\Delta r_{c,i}=I(t)\ell_s,
 $$
 
-Dividing by the local dual area converts current to current density, while the normalized weights preserve total current. This matters even more as the grid is refined or made nonuniform: a source definition should describe a physical location, not an array index.[^source-source]
+where $\Delta r_{c,i}$ is the radial-node control length. Dividing by the local dual-cell volume converts current moment to current density, while normalized weights preserve the total current moment. This matters even more as the grid is refined or made nonuniform: a source definition should describe a physical location, not an array index.[^source-source]
 
 ## What the algorithm gets right—and what remains
 

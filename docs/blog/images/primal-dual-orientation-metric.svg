@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+  <title id="title">Primal and dual orientation separated from spherical metric</title>
+  <desc id="desc">A directed primal edge runs from tail to head. Its positive dual edge runs from the right face center to the left face center. These directions determine head-minus-tail, left-minus-right, and circulation signs. Spherical arc lengths and areas are then applied separately using radius, central angles, and solid angles.</desc>
+  <defs>
+    <marker id="blue-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#2878a8"/></marker>
+    <marker id="purple-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#7453a6"/></marker>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .panel-title { font: 700 20px Inter, ui-sans-serif, system-ui, sans-serif; fill: #243548; }
+      .label { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #30455a; }
+      .small { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5b6d80; }
+      .tiny { font: 400 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #65778a; }
+      .formula { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #394e63; }
+      .sign { font: 700 13px Inter, ui-sans-serif, system-ui, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="650" fill="#fff"/>
+  <text class="title" x="40" y="45">Topology chooses the signs; metric supplies the scale</text>
+  <text class="subtitle" x="40" y="71">One orientation convention defines every difference and circulation before any radius, length, or area is introduced.</text>
+
+  <!-- Orientation panel -->
+  <rect x="34" y="98" width="522" height="495" rx="18" fill="#f7fafc" stroke="#b7c7d5"/>
+  <text class="panel-title" x="58" y="134">Local primal–dual orientation</text>
+
+  <polygon points="100,294 290,142 480,294" fill="#e7f1f7" stroke="#668fac" stroke-width="2"/>
+  <polygon points="100,294 290,446 480,294" fill="#eee8f7" stroke="#8e72b4" stroke-width="2"/>
+  <text class="label" x="290" y="177" text-anchor="middle">left face</text>
+  <text class="small" x="290" y="198" text-anchor="middle">center f_left</text>
+  <text class="label" x="290" y="420" text-anchor="middle">right face</text>
+  <text class="small" x="290" y="441" text-anchor="middle">center f_right</text>
+  <circle cx="290" cy="218" r="7" fill="#2878a8" stroke="#fff" stroke-width="2"/>
+  <circle cx="290" cy="370" r="7" fill="#7453a6" stroke="#fff" stroke-width="2"/>
+
+  <path d="M116 294 L464 294" stroke="#2878a8" stroke-width="5" marker-end="url(#blue-arrow)"/>
+  <circle cx="100" cy="294" r="8" fill="#fff" stroke="#2878a8" stroke-width="3"/>
+  <circle cx="480" cy="294" r="8" fill="#fff" stroke="#2878a8" stroke-width="3"/>
+  <text class="label" x="100" y="324" text-anchor="middle">tail</text>
+  <text class="label" x="480" y="324" text-anchor="middle">head</text>
+  <text class="sign" x="290" y="280" text-anchor="middle" fill="#286f9a">positive primal edge</text>
+
+  <path d="M290 362 L290 226" stroke="#7453a6" stroke-width="5" marker-end="url(#purple-arrow)"/>
+  <circle cx="290" cy="294" r="8" fill="#fff" stroke="#596d80" stroke-width="2"/>
+  <text class="sign" x="314" y="347" fill="#684695">positive dual edge</text>
+  <text class="tiny" x="314" y="365">right → left</text>
+
+  <rect x="72" y="486" width="446" height="76" rx="12" fill="#eef3f7"/>
+  <text class="formula" x="90" y="510">edge difference:       value[head] − value[tail]</text>
+  <text class="formula" x="90" y="535">dual-edge difference: value[left] − value[right]</text>
+  <text class="tiny" x="295" y="554" text-anchor="middle">shared edges receive opposite boundary signs in neighbouring cells</text>
+
+  <!-- Topology/metric panel -->
+  <rect x="584" y="98" width="582" height="495" rx="18" fill="#fbfcfd" stroke="#b7c7d5"/>
+  <text class="panel-title" x="608" y="134">Reusable incidence + radius-dependent metric</text>
+
+  <rect x="608" y="158" width="256" height="386" rx="14" fill="#f5f9fc" stroke="#a8c5d8"/>
+  <text class="label" x="736" y="187" text-anchor="middle">topology · built once</text>
+  <rect x="630" y="211" width="212" height="62" rx="9" fill="#e5f1f8"/>
+  <text class="formula" x="736" y="236" text-anchor="middle">D_s φ = φ_head − φ_tail</text>
+  <text class="small" x="736" y="258" text-anchor="middle">one value per primal edge</text>
+  <rect x="630" y="289" width="212" height="62" rx="9" fill="#eee8f7"/>
+  <text class="formula" x="736" y="314" text-anchor="middle">D_d ψ = ψ_left − ψ_right</text>
+  <text class="small" x="736" y="336" text-anchor="middle">one value per dual edge</text>
+  <rect x="630" y="367" width="212" height="62" rx="9" fill="#e6f3ee"/>
+  <text class="formula" x="736" y="392" text-anchor="middle">C_p = Σ s_pe · edge value</text>
+  <text class="small" x="736" y="414" text-anchor="middle">three oriented face edges</text>
+  <rect x="630" y="445" width="212" height="76" rx="9" fill="#f6ead1"/>
+  <text class="formula" x="736" y="470" text-anchor="middle">C_d = Σ s_de · edge value</text>
+  <text class="small" x="736" y="492" text-anchor="middle">five or six oriented dual edges</text>
+  <text class="tiny" x="736" y="511" text-anchor="middle">integer indices and ± signs only</text>
+
+  <path d="M868 351 L894 351" stroke="#647689" stroke-width="2" marker-end="url(#blue-arrow)"/>
+
+  <rect x="898" y="158" width="244" height="386" rx="14" fill="#f9f7fd" stroke="#b7a5d1"/>
+  <text class="label" x="1020" y="187" text-anchor="middle">metric · evaluated at radius r</text>
+  <circle cx="1020" cy="281" r="64" fill="#eef3f7" stroke="#8096a9" stroke-width="2"/>
+  <path d="M969 319 A64 64 0 0 1 1071 319" fill="none" stroke="#2878a8" stroke-width="5"/>
+  <path d="M1020 281 L969 319 M1020 281 L1071 319" stroke="#9baab8"/>
+  <text class="formula" x="1020" y="267" text-anchor="middle">r</text>
+  <text class="small" x="1020" y="345" text-anchor="middle">central angle θ</text>
+  <rect x="924" y="376" width="192" height="126" rx="11" fill="#eee8f7"/>
+  <text class="formula" x="1020" y="404" text-anchor="middle">l_p = r θ_p</text>
+  <text class="formula" x="1020" y="432" text-anchor="middle">l_d = r θ_d</text>
+  <text class="formula" x="1020" y="460" text-anchor="middle">A_p = r² Ω_p</text>
+  <text class="formula" x="1020" y="488" text-anchor="middle">A_d = r² Ω_d</text>
+  <text class="tiny" x="1020" y="526" text-anchor="middle">same angular mesh on every shell</text>
+
+  <text class="small" x="600" y="621" text-anchor="middle">Incidence answers “which values, with which signs?” Metric answers “over what physical length or area?”</text>
+</svg>

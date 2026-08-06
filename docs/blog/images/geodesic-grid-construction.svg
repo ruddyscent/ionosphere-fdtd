@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" role="img" aria-labelledby="title desc">
+  <title id="title">Construction of the geodesic primal and dual grids</title>
+  <desc id="desc">Four stages show an icosahedron, a triangle split into four children, projection of new vertices onto the sphere, and construction of dual cells by connecting adjacent triangle centers. The final primal mesh is triangular and the dual mesh contains twelve pentagons and otherwise hexagons.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#647689"/></marker>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .stage { font: 700 18px Inter, ui-sans-serif, system-ui, sans-serif; fill: #243548; }
+      .label { font: 700 13px Inter, ui-sans-serif, system-ui, sans-serif; fill: #34495e; }
+      .small { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5b6d80; }
+      .tiny { font: 400 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #65778a; }
+      .formula { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #3c5267; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="640" fill="#fff"/>
+  <text class="title" x="40" y="45">One spherical topology, built in four steps</text>
+  <text class="subtitle" x="40" y="71">Subdivision creates the triangular primal mesh; triangle centers and adjacency create its pentagon–hexagon dual.</text>
+
+  <!-- Stage cards -->
+  <rect x="32" y="101" width="254" height="410" rx="18" fill="#f7fafc" stroke="#becbd7"/>
+  <rect x="326" y="101" width="254" height="410" rx="18" fill="#f6fafe" stroke="#a8c5d8"/>
+  <rect x="620" y="101" width="254" height="410" rx="18" fill="#f7fbf9" stroke="#9abfaf"/>
+  <rect x="914" y="101" width="254" height="410" rx="18" fill="#fbf9fe" stroke="#b7a5d1"/>
+  <path d="M288 306 L322 306" stroke="#647689" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M582 306 L616 306" stroke="#647689" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M876 306 L910 306" stroke="#647689" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Icosahedron -->
+  <text class="stage" x="159" y="137" text-anchor="middle">1 · Icosahedron</text>
+  <text class="small" x="159" y="159" text-anchor="middle">coarse closed sphere</text>
+  <g transform="translate(56 185)" fill="none" stroke="#526d83" stroke-width="2">
+    <polygon points="103,0 184,59 153,154 53,154 22,59" fill="#e8eef3"/>
+    <polygon points="103,0 153,154 22,59" fill="#dce6ee"/>
+    <polygon points="103,0 184,59 53,154" fill="#eef3f6"/>
+    <line x1="22" y1="59" x2="184" y2="59"/>
+    <line x1="53" y1="154" x2="184" y2="59"/>
+    <line x1="153" y1="154" x2="22" y2="59"/>
+    <circle cx="103" cy="0" r="4" fill="#2878a8"/><circle cx="184" cy="59" r="4" fill="#2878a8"/><circle cx="153" cy="154" r="4" fill="#2878a8"/><circle cx="53" cy="154" r="4" fill="#2878a8"/><circle cx="22" cy="59" r="4" fill="#2878a8"/>
+  </g>
+  <rect x="59" y="377" width="200" height="67" rx="11" fill="#eef3f7"/>
+  <text class="formula" x="159" y="401" text-anchor="middle">N_v = 12 · N_e = 30</text>
+  <text class="formula" x="159" y="423" text-anchor="middle">N_f = 20</text>
+  <text class="tiny" x="159" y="470" text-anchor="middle">Every face starts triangular.</text>
+
+  <!-- Subdivide -->
+  <text class="stage" x="453" y="137" text-anchor="middle">2 · Subdivide</text>
+  <text class="small" x="453" y="159" text-anchor="middle">bisect each edge</text>
+  <g transform="translate(358 205)" stroke="#2878a8" stroke-width="2">
+    <polygon points="95,0 190,165 0,165" fill="#e5f1f8"/>
+    <line x1="47.5" y1="82.5" x2="142.5" y2="82.5"/>
+    <line x1="47.5" y1="82.5" x2="95" y2="165"/>
+    <line x1="142.5" y1="82.5" x2="95" y2="165"/>
+    <g fill="#fff"><circle cx="95" cy="0" r="5"/><circle cx="190" cy="165" r="5"/><circle cx="0" cy="165" r="5"/></g>
+    <g fill="#dff1ec" stroke="#4f9783"><circle cx="47.5" cy="82.5" r="6"/><circle cx="142.5" cy="82.5" r="6"/><circle cx="95" cy="165" r="6"/></g>
+  </g>
+  <rect x="358" y="396" width="190" height="42" rx="11" fill="#deedf6"/>
+  <text class="label" x="453" y="422" text-anchor="middle">1 face → 4 children</text>
+  <text class="tiny" x="453" y="470" text-anchor="middle">Repeat L times: counts scale as 4^L.</text>
+
+  <!-- Project -->
+  <text class="stage" x="747" y="137" text-anchor="middle">3 · Project</text>
+  <text class="small" x="747" y="159" text-anchor="middle">normalize new vertices</text>
+  <path d="M649 360 Q747 164 845 360" fill="#e6f3ee" stroke="#4f9783" stroke-width="3"/>
+  <path d="M669 333 Q747 190 825 333" fill="none" stroke="#8ebcaf" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <g stroke="#2878a8" stroke-width="1.7" fill="none">
+    <path d="M649 360 L702 264 L747 360 Z"/><path d="M702 264 L792 264 L747 360 Z"/><path d="M792 264 L845 360 L747 360 Z"/>
+  </g>
+  <g fill="#2878a8" stroke="#fff" stroke-width="2">
+    <circle cx="649" cy="360" r="6"/><circle cx="702" cy="264" r="6"/><circle cx="792" cy="264" r="6"/><circle cx="845" cy="360" r="6"/><circle cx="747" cy="360" r="6"/>
+  </g>
+  <path d="M747 333 L747 278" stroke="#4f9783" stroke-width="2" marker-end="url(#arrow)"/>
+  <text class="label" x="747" y="401" text-anchor="middle">x → x / ||x||</text>
+  <text class="tiny" x="747" y="470" text-anchor="middle">All primal vertices return to the sphere.</text>
+
+  <!-- Dualize -->
+  <text class="stage" x="1041" y="137" text-anchor="middle">4 · Build the dual</text>
+  <text class="small" x="1041" y="159" text-anchor="middle">connect adjacent face centers</text>
+  <g transform="translate(945 195)" stroke="#536f84" stroke-width="1.5" fill="none">
+    <path d="M96 0 L180 48 L166 140 L96 184 L26 140 L12 48 Z"/>
+    <path d="M96 92 L96 0 M96 92 L180 48 M96 92 L166 140 M96 92 L96 184 M96 92 L26 140 M96 92 L12 48"/>
+    <g fill="#f7ead5" stroke="#bd8731"><circle cx="96" cy="46" r="5"/><circle cx="138" cy="70" r="5"/><circle cx="131" cy="116" r="5"/><circle cx="96" cy="138" r="5"/><circle cx="61" cy="116" r="5"/><circle cx="54" cy="70" r="5"/></g>
+    <polygon points="96,46 138,70 131,116 96,138 61,116 54,70" fill="#eee8f7" stroke="#7453a6" stroke-width="3"/>
+    <circle cx="96" cy="92" r="6" fill="#2878a8" stroke="#fff" stroke-width="2"/>
+  </g>
+  <text class="label" x="1041" y="414" text-anchor="middle">one dual cell per primal vertex</text>
+  <text class="tiny" x="1041" y="445" text-anchor="middle">degree 5 → pentagon</text>
+  <text class="tiny" x="1041" y="464" text-anchor="middle">degree 6 → hexagon</text>
+
+  <rect x="104" y="545" width="992" height="58" rx="15" fill="#eef3f7" stroke="#cbd6df"/>
+  <text class="label" x="600" y="570" text-anchor="middle">Primal: triangular faces and directed edges · Dual: pentagon/hexagon cells and crossing dual edges</text>
+  <text class="small" x="600" y="592" text-anchor="middle">Exactly 12 inherited degree-five vertices supply the curvature required to close a spherical hexagonal network.</text>
+</svg>
