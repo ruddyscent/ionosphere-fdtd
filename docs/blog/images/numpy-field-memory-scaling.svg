@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+  <title id="title">Persistent FDTD field memory by geodesic subdivision</title>
+  <desc id="desc">A logarithmic line chart shows persistent memory for Er, Et, Hr, and Ht together with 24 radial cells. Float64 rises from 0.017 MiB at subdivision zero to 1100 MiB at subdivision eight; float32 uses half as much.</desc>
+  <defs>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .axis { font: 600 13px Inter, ui-sans-serif, system-ui, sans-serif; fill: #42566a; }
+      .tick { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #607184; }
+      .legend { font: 700 13px Inter, ui-sans-serif, system-ui, sans-serif; }
+      .value { font: 700 12px Inter, ui-sans-serif, system-ui, sans-serif; }
+      .note { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #596c7f; }
+      .mono { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #3c5267; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="650" fill="#fff"/>
+  <text class="title" x="42" y="45">Field memory grows by about 4× per subdivision</text>
+  <text class="subtitle" x="42" y="71">Persistent E_r, E_t, H_r, and H_t arrays only · N_r = 24 · logarithmic memory axis</text>
+
+  <rect x="35" y="96" width="1130" height="475" rx="18" fill="#f8fafc" stroke="#ccd7e1"/>
+
+  <!-- Horizontal log grid -->
+  <g stroke="#d8e0e7">
+    <line x1="150" y1="505" x2="1040" y2="505"/>
+    <line x1="150" y1="431" x2="1040" y2="431"/>
+    <line x1="150" y1="357" x2="1040" y2="357"/>
+    <line x1="150" y1="283" x2="1040" y2="283"/>
+    <line x1="150" y1="209" x2="1040" y2="209"/>
+    <line x1="150" y1="135" x2="1040" y2="135"/>
+  </g>
+  <g class="tick" text-anchor="end">
+    <text x="132" y="509">0.01 MiB</text>
+    <text x="132" y="435">0.1 MiB</text>
+    <text x="132" y="361">1 MiB</text>
+    <text x="132" y="287">10 MiB</text>
+    <text x="132" y="213">100 MiB</text>
+    <text x="132" y="139">1,000 MiB</text>
+  </g>
+  <text class="axis" x="42" y="320" text-anchor="middle" transform="rotate(-90 42 320)">persistent field memory</text>
+
+  <!-- Vertical subdivision grid -->
+  <g stroke="#e2e8ee">
+    <line x1="150" y1="120" x2="150" y2="520"/><line x1="260" y1="120" x2="260" y2="520"/><line x1="370" y1="120" x2="370" y2="520"/><line x1="480" y1="120" x2="480" y2="520"/><line x1="590" y1="120" x2="590" y2="520"/><line x1="700" y1="120" x2="700" y2="520"/><line x1="810" y1="120" x2="810" y2="520"/><line x1="920" y1="120" x2="920" y2="520"/><line x1="1030" y1="120" x2="1030" y2="520"/>
+  </g>
+  <g class="tick" text-anchor="middle">
+    <text x="150" y="542">0</text><text x="260" y="542">1</text><text x="370" y="542">2</text><text x="480" y="542">3</text><text x="590" y="542">4</text><text x="700" y="542">5</text><text x="810" y="542">6</text><text x="920" y="542">7</text><text x="1030" y="542">8</text>
+  </g>
+  <text class="axis" x="590" y="560" text-anchor="middle">geodesic subdivision L</text>
+
+  <!-- float64 path -->
+  <polyline points="150,488 260,444 370,399 480,355 590,310 700,266 810,221 920,176 1030,132" fill="none" stroke="#7453a6" stroke-width="4" stroke-linejoin="round"/>
+  <g fill="#7453a6" stroke="#fff" stroke-width="2">
+    <circle cx="150" cy="488" r="6"/><circle cx="260" cy="444" r="6"/><circle cx="370" cy="399" r="6"/><circle cx="480" cy="355" r="6"/><circle cx="590" cy="310" r="6"/><circle cx="700" cy="266" r="6"/><circle cx="810" cy="221" r="6"/><circle cx="920" cy="176" r="6"/><circle cx="1030" cy="132" r="7"/>
+  </g>
+
+  <!-- float32 path -->
+  <polyline points="150,510 260,466 370,422 480,377 590,332 700,288 810,243 920,199 1030,154" fill="none" stroke="#2878a8" stroke-width="4" stroke-linejoin="round"/>
+  <g fill="#2878a8" stroke="#fff" stroke-width="2">
+    <circle cx="150" cy="510" r="6"/><circle cx="260" cy="466" r="6"/><circle cx="370" cy="422" r="6"/><circle cx="480" cy="377" r="6"/><circle cx="590" cy="332" r="6"/><circle cx="700" cy="288" r="6"/><circle cx="810" cy="243" r="6"/><circle cx="920" cy="199" r="6"/><circle cx="1030" cy="154" r="7"/>
+  </g>
+
+  <!-- labels and legend -->
+  <rect x="176" y="113" width="176" height="62" rx="11" fill="#fff" stroke="#d1dbe4"/>
+  <line x1="194" y1="134" x2="226" y2="134" stroke="#7453a6" stroke-width="4"/>
+  <circle cx="210" cy="134" r="5" fill="#7453a6"/>
+  <text class="legend" x="238" y="139" fill="#654394">float64 · 8 B</text>
+  <line x1="194" y1="157" x2="226" y2="157" stroke="#2878a8" stroke-width="4"/>
+  <circle cx="210" cy="157" r="5" fill="#2878a8"/>
+  <text class="legend" x="238" y="162" fill="#246f9c">float32 · 4 B</text>
+
+  <rect x="535" y="286" width="110" height="69" rx="10" fill="#fff" stroke="#d1dbe4"/>
+  <text class="value" x="590" y="304" text-anchor="middle" fill="#654394">L = 4</text>
+  <text class="value" x="590" y="324" text-anchor="middle" fill="#654394">4.30 MiB</text>
+  <text class="value" x="590" y="344" text-anchor="middle" fill="#246f9c">2.15 MiB</text>
+
+  <text class="value" x="1050" y="124" fill="#654394">L = 8</text>
+  <text class="value" x="1050" y="144" fill="#654394">1,100 MiB</text>
+  <text class="value" x="1050" y="164" fill="#246f9c">550 MiB</text>
+
+  <rect x="62" y="588" width="1076" height="38" rx="12" fill="#eef3f7"/>
+  <text class="mono" x="82" y="612">scalars = N_v(N_r+1) + N_e(N_r+1) + N_eN_r + N_fN_r</text>
+  <text class="note" x="1118" y="612" text-anchor="end">Excludes geometry, materials, topology, and temporary arrays</text>
+</svg>

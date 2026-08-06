@@ -45,7 +45,13 @@ Et: (Ne, Nr)
 Hr: (Nf, Nr)
 ```
 
-The first axis is always a surface entity and the second is radial position. This layout lets one indexed topology operation act on every radial layer at once. For example, a surface difference of $E_r$ is simply:
+The first axis is always a surface entity and the second is radial position. The diagram below connects those array dimensions to the radial staggering from Part 2. $E_r$ and $H_t$ occupy the $N_r+1$ TM-r planes, while $E_t$ and $H_r$ occupy the $N_r$ intervening TE-r layers.
+
+![NumPy field array layout showing the surface-entity first axis and the staggered radial-position second axis for Er, Ht, Et, and Hr](images/numpy-field-array-layout.svg)
+
+*A topology operator changes or reduces the surface-entity axis while acting on every radial column at once. Radial differencing acts along the second axis.*
+
+This layout lets one indexed topology operation act on every radial layer at once. For example, a surface difference of $E_r$ is simply:
 
 ```python
 er_head_minus_tail = er[edges[:, 1]] - er[edges[:, 0]]
@@ -96,24 +102,23 @@ vertex_edges:      (Nv, 6)
 vertex_edge_signs: (Nv, 6)
 ```
 
-For a pentagon, the unused sixth slot has sign zero. For a hexagon, all six slots are active. The circulation becomes a gather followed by a contraction:
+For a pentagon, the unused sixth slot has sign zero. For a hexagon, all six slots are active. The circulation becomes six fixed slot-wise gathers and accumulations. The Python loop has constant length six; every iteration still operates on all $N_v$ vertices and every trailing radial value at once:
 
 ```python
-selected = edge_values[vertex_edges]
-flat = selected.reshape(Nv, 6, -1)
-result = np.einsum("vdk,vd->vk", flat, vertex_edge_signs, optimize=True)
+sign_shape = (Nv,) + (1,) * (edge_values.ndim - 1)
+result = edge_values[vertex_edges[:, 0]].copy()
+result *= vertex_edge_signs[:, 0].reshape(sign_shape)
+for slot in range(1, 6):
+    result += edge_values[vertex_edges[:, slot]] * (
+        vertex_edge_signs[:, slot].reshape(sign_shape)
+    )
 ```
 
-The padded edge index itself can safely contain zero in an unused slot because its corresponding sign is zero. `numpy.einsum` expresses the final contraction explicitly and accepts an `optimize` argument for contraction-path optimization.[^numpy-einsum] Tests compare this optimized operation with the scatter reference for scalar, one-dimensional, and multidimensional trailing shapes.[^backend-tests]
+The padded edge index itself can safely contain zero in an unused slot because its corresponding sign is zero. Tests compare this optimized operation with the scatter reference for scalar, one-dimensional, and multidimensional trailing shapes.[^numpy-backend-source][^backend-tests]
 
-```mermaid
-flowchart LR
-    E["edge_values<br/>(Nₑ, Nᵣ)"]
-    G["gather with vertex_edges<br/>(Nᵥ, 6, Nᵣ)"]
-    W["multiply by incidence signs<br/>pentagon slot 6 has weight 0"]
-    C["einsum over degree axis<br/>(Nᵥ, Nᵣ)"]
-    E --> G --> W --> C
-```
+![Side-by-side array diagrams of triangular face circulation and padded pentagon or hexagon dual-cell circulation](images/numpy-circulation-gather-reduce.svg)
+
+*Both operators turn oriented topology into gather–sign–reduce work. The triangle reduces a length-three incidence axis in one NumPy sum; the dual cell uses six fixed vectorized accumulations, with a zero-weight sixth slot for each pentagon.*
 
 ## Precompute everything that does not change
 
@@ -141,6 +146,12 @@ flowchart LR
 ```
 
 ## One NumPy time step
+
+One complete step first advances the two magnetic fields, then uses those updated magnetic fields to advance the two electric fields. The diagram follows array shapes rather than physical stencil positions; the physical locations are shown in Part 2.
+
+![Shape-aware data-flow diagram for one NumPy FDTD time step, showing the two magnetic updates followed by the two electric updates](images/numpy-one-step-dataflow.svg)
+
+*Persistent fields are updated in place. Surface and radial differences, signed circulations, and metric-scaled curls are temporary arrays shaped like the field they update.*
 
 The magnetic update starts with a vectorized surface derivative:
 
@@ -206,7 +217,13 @@ $$
 N_v(N_r+1)+N_e(N_r+1)+N_eN_r+N_fN_r.
 $$
 
-Double precision uses eight bytes per scalar. At high subdivision, the surface entity count dominates quickly. This scaling explains why a clean CPU reference is essential but not sufficient for the largest verification jobs.
+Double precision uses eight bytes per scalar. With 24 radial cells, these four persistent fields grow from about 4.30 MiB at subdivision 4 to 1,100 MiB at subdivision 8; single precision uses exactly half those values. Geometry, material, topology, and temporary arrays require additional memory.
+
+![Logarithmic chart of persistent FDTD field memory from subdivision zero through eight for float32 and float64 with 24 radial cells](images/numpy-field-memory-scaling.svg)
+
+*Each subdivision splits every surface triangle into four and therefore increases the dominant field storage by approximately four. The logarithmic vertical axis makes that constant ratio appear as nearly parallel straight lines.*
+
+At high subdivision, the surface entity count dominates quickly. This scaling explains why a clean CPU reference is essential but not sufficient for the largest verification jobs.
 
 ## How correctness is tested
 
@@ -236,8 +253,6 @@ Its limitation is not expressiveness but scale. At hundreds of thousands of surf
 [^numpy-indexing]: NumPy Developers, “[Indexing on ndarrays: Advanced indexing](https://numpy.org/doc/stable/user/basics.indexing.html#advanced-indexing),” *NumPy documentation*, accessed 2026-08-06.
 
 [^numpy-at]: NumPy Developers, “[`numpy.ufunc.at`](https://numpy.org/doc/stable/reference/generated/numpy.ufunc.at.html),” *NumPy API reference*, accessed 2026-08-06.
-
-[^numpy-einsum]: NumPy Developers, “[`numpy.einsum`](https://numpy.org/doc/stable/reference/generated/numpy.einsum.html),” *NumPy API reference*, accessed 2026-08-06.
 
 [^numpy-backend-source]: Ionosphere FDTD project, “[NumPy backend implementation](../../src/ionosphere_fdtd/backends/numpy_backend.py).”
 

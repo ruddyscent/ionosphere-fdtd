@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Vectorized triangular and dual-cell circulation</title>
+  <desc id="desc">Side-by-side diagrams show how topology index and sign tables gather complete radial rows. Triangular faces reduce three signed rows at once, while pentagon and hexagon dual cells accumulate six vectorized incidence slots with a zero sign in the padded pentagon slot.</desc>
+  <defs>
+    <marker id="blue-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#2878a8"/></marker>
+    <marker id="purple-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#7453a6"/></marker>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .panel-title { font: 700 20px Inter, ui-sans-serif, system-ui, sans-serif; fill: #243548; }
+      .step { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #30455a; }
+      .mono { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #334a60; }
+      .small { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5b6d80; }
+      .tiny { font: 400 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #65778a; }
+      .sign { font: 700 17px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .result { font: 700 15px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #263b50; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="720" fill="#fff"/>
+  <text class="title" x="40" y="45">Irregular geometry becomes fixed-width array work</text>
+  <text class="subtitle" x="40" y="71">Index tables choose edge rows; sign tables orient them; reduction removes the incidence-slot axis.</text>
+
+  <!-- Face circulation panel -->
+  <rect x="32" y="96" width="554" height="574" rx="18" fill="#f7fbfe" stroke="#a9c5d8" stroke-width="1.5"/>
+  <text class="panel-title" x="56" y="130">Primal triangle · exactly 3 edges</text>
+  <text class="small" x="56" y="153">Vectorized over every face and radial layer</text>
+
+  <text class="step" x="56" y="190">1 · topology row for face f</text>
+  <rect x="56" y="205" width="238" height="49" rx="9" fill="#e5f1f8" stroke="#73a5c5"/>
+  <text class="mono" x="72" y="226">face_edges[f]</text>
+  <text class="mono" x="72" y="245">[ e7, e2, e9 ]</text>
+  <rect x="310" y="205" width="214" height="49" rx="9" fill="#f1edf7" stroke="#a38bc5"/>
+  <text class="mono" x="326" y="226">face_edge_signs[f]</text>
+  <text class="sign" x="364" y="247" fill="#3d8b75">+</text>
+  <text class="sign" x="412" y="247" fill="#b34f4a">−</text>
+  <text class="sign" x="460" y="247" fill="#3d8b75">+</text>
+
+  <text class="step" x="56" y="292">2 · gather three complete radial rows</text>
+  <rect x="56" y="310" width="468" height="116" rx="10" fill="#ffffff" stroke="#b9c8d4"/>
+  <text class="mono" x="74" y="333">selected = edge_values[face_edges]</text>
+  <text class="small" x="410" y="333">shape (N_f, 3, N_r)</text>
+  <g stroke="#8cabc0">
+    <rect x="76" y="350" width="410" height="19" fill="#dfeef7"/><rect x="76" y="371" width="410" height="19" fill="#f4e3e1"/><rect x="76" y="392" width="410" height="19" fill="#dff1ec"/>
+  </g>
+  <text class="tiny" x="88" y="364">edge e7 · all N_r values</text>
+  <text class="tiny" x="88" y="385">edge e2 · all N_r values</text>
+  <text class="tiny" x="88" y="406">edge e9 · all N_r values</text>
+
+  <path d="M290 430 L290 459" stroke="#2878a8" stroke-width="2" marker-end="url(#blue-arrow)"/>
+  <text class="step" x="56" y="477">3 · multiply signs, then sum axis 1</text>
+  <rect x="56" y="493" width="468" height="104" rx="11" fill="#eaf3f8" stroke="#6c9dbc" stroke-width="1.5"/>
+  <text class="mono" x="76" y="520">(+ row e7) + (− row e2) + (+ row e9)</text>
+  <line x1="76" y1="539" x2="486" y2="539" stroke="#8a9dad"/>
+  <text class="result" x="76" y="567">face_circulation → (N_f, N_r)</text>
+  <text class="small" x="76" y="586">one signed line integral for every face and layer</text>
+  <rect x="116" y="619" width="386" height="29" rx="14.5" fill="#dcecf6"/>
+  <text class="small" x="309" y="638" text-anchor="middle">No Python loop over N_f faces or N_r layers</text>
+
+  <!-- Dual cell panel -->
+  <rect x="614" y="96" width="554" height="574" rx="18" fill="#fbf9fe" stroke="#b7a5d1" stroke-width="1.5"/>
+  <text class="panel-title" x="638" y="130">Dual cell · degree 5 or 6</text>
+  <text class="small" x="638" y="153">Pad once, then process each slot over all vertices and layers</text>
+
+  <text class="step" x="638" y="190">1 · fixed-width incidence row for vertex v</text>
+  <rect x="638" y="205" width="506" height="75" rx="9" fill="#f0ebf7" stroke="#9d84bd"/>
+  <text class="mono" x="654" y="226">vertex_edges[v]       [ e4, e1, e8, e3, e6, 0 ]</text>
+  <text class="mono" x="654" y="250">vertex_edge_signs[v]  [ +1, −1, +1, −1, +1, 0 ]</text>
+  <text class="tiny" x="1108" y="270" text-anchor="end">pentagon padding ↑</text>
+
+  <text class="step" x="638" y="316">2 · gather one slot across every vertex</text>
+  <rect x="638" y="332" width="506" height="132" rx="10" fill="#fff" stroke="#c3b7d3"/>
+  <text class="mono" x="656" y="355">edge_values[vertex_edges[:, slot]]</text>
+  <text class="small" x="1032" y="355">(N_v, N_r)</text>
+  <g>
+    <rect x="658" y="375" width="67" height="43" rx="6" fill="#e6f1f8" stroke="#7caac5"/>
+    <rect x="735" y="375" width="67" height="43" rx="6" fill="#eee9f6" stroke="#9b83bb"/>
+    <rect x="812" y="375" width="67" height="43" rx="6" fill="#e6f1f8" stroke="#7caac5"/>
+    <rect x="889" y="375" width="67" height="43" rx="6" fill="#eee9f6" stroke="#9b83bb"/>
+    <rect x="966" y="375" width="67" height="43" rx="6" fill="#e6f1f8" stroke="#7caac5"/>
+    <rect x="1043" y="375" width="67" height="43" rx="6" fill="#f0f1f2" stroke="#b7bec5" stroke-dasharray="4 3"/>
+  </g>
+  <g class="mono" text-anchor="middle">
+    <text x="691" y="401">slot 0</text><text x="768" y="401">slot 1</text><text x="845" y="401">slot 2</text><text x="922" y="401">slot 3</text><text x="999" y="401">slot 4</text><text x="1076" y="401">slot 5</text>
+  </g>
+  <text class="tiny" x="658" y="446">Each box stands for an entire (N_v, N_r) gathered array.</text>
+
+  <path d="M892 468 L892 493" stroke="#7453a6" stroke-width="2" marker-end="url(#purple-arrow)"/>
+  <text class="step" x="638" y="512">3 · sign and accumulate six fixed slots</text>
+  <rect x="638" y="526" width="506" height="91" rx="11" fill="#eee8f7" stroke="#8e72b4" stroke-width="1.5"/>
+  <text class="mono" x="658" y="550">result  = signed gather(slot 0)</text>
+  <text class="mono" x="658" y="572">result += signed gather(slot 1 ... 5)</text>
+  <text class="result" x="658" y="601">dual_cell_circulation → (N_v, N_r)</text>
+  <rect x="672" y="629" width="438" height="29" rx="14.5" fill="#e8e0f3"/>
+  <text class="small" x="891" y="648" text-anchor="middle">6 Python iterations; each covers every N_v × N_r value</text>
+
+  <text class="tiny" x="1160" y="704" text-anchor="end">A hexagon uses six nonzero signs; a pentagon makes the sixth contribution exactly zero.</text>
+</svg>

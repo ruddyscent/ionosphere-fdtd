@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+  <title id="title">NumPy field array shapes and radial staggering</title>
+  <desc id="desc">The four FDTD fields use a surface-entity first axis and a radial-position second axis. Er and Ht have Nr plus one TM-r planes, while Et and Hr have Nr staggered TE-r layers.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#60758a"/>
+    </marker>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .panel { font: 700 18px Inter, ui-sans-serif, system-ui, sans-serif; fill: #243548; }
+      .field { font: 700 17px Inter, ui-sans-serif, system-ui, sans-serif; fill: #1e3042; }
+      .shape { font: 700 14px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #34495d; }
+      .label { font: 600 13px Inter, ui-sans-serif, system-ui, sans-serif; fill: #42566a; }
+      .small { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #607184; }
+      .tiny { font: 400 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #65778a; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="650" fill="#ffffff"/>
+  <text class="title" x="42" y="45">Array shape is the field-placement map</text>
+  <text class="subtitle" x="42" y="71">Axis 0 selects a geodesic surface entity; axis 1 walks through staggered radial positions.</text>
+
+  <!-- Radial staggering -->
+  <rect x="36" y="98" width="330" height="498" rx="18" fill="#f7f9fb" stroke="#c9d4df"/>
+  <text class="panel" x="60" y="132">Radial staggering</text>
+  <text class="small" x="60" y="155">A schematic radial column</text>
+
+  <line x1="96" y1="198" x2="96" y2="524" stroke="#9db0c1" stroke-width="3"/>
+  <path d="M96 535 L96 177" stroke="#60758a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text class="small" x="71" y="550" text-anchor="middle">radius</text>
+
+  <!-- TM-r nodes -->
+  <g fill="#deedf6" stroke="#2878a8" stroke-width="2">
+    <circle cx="96" cy="480" r="9"/><circle cx="96" cy="380" r="9"/><circle cx="96" cy="280" r="9"/><circle cx="96" cy="180" r="9"/>
+  </g>
+  <g class="label">
+    <text x="122" y="185">TM-r plane N_r</text>
+    <text x="122" y="285">TM-r plane 2</text>
+    <text x="122" y="385">TM-r plane 1</text>
+    <text x="122" y="485">TM-r plane 0</text>
+  </g>
+  <g class="small" fill="#2878a8">
+    <text x="122" y="205">E_r at vertices · H_t on edges</text>
+    <text x="122" y="305">E_r at vertices · H_t on edges</text>
+    <text x="122" y="405">E_r at vertices · H_t on edges</text>
+    <text x="122" y="505">E_r at vertices · H_t on edges</text>
+  </g>
+
+  <!-- TE-r midpoints -->
+  <g fill="#eee7f7" stroke="#7453a6" stroke-width="2">
+    <rect x="89" y="423" width="14" height="14" rx="2"/><rect x="89" y="323" width="14" height="14" rx="2"/><rect x="89" y="223" width="14" height="14" rx="2"/>
+  </g>
+  <g class="label" fill="#7453a6">
+    <text x="122" y="435">TE-r layer 0</text>
+    <text x="122" y="335">TE-r layer 1</text>
+    <text x="122" y="235">TE-r layer N_r - 1</text>
+  </g>
+  <g class="small">
+    <text x="122" y="454">E_t on edges · H_r in faces</text>
+    <text x="122" y="354">E_t on edges · H_r in faces</text>
+    <text x="122" y="254">E_t on edges · H_r in faces</text>
+  </g>
+  <rect x="58" y="565" width="286" height="19" rx="9.5" fill="#e9eef3"/>
+  <text class="tiny" x="201" y="579" text-anchor="middle">N_r cells → N_r + 1 nodes and N_r midpoints</text>
+
+  <!-- Array layout -->
+  <rect x="390" y="98" width="774" height="498" rx="18" fill="#fbfcfd" stroke="#c9d4df"/>
+  <text class="panel" x="416" y="132">NumPy storage</text>
+  <path d="M594 157 L1050 157" stroke="#60758a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text class="label" x="822" y="151" text-anchor="middle">axis 1 · radial position</text>
+  <text class="label" x="416" y="174">axis 0 · one row per surface entity</text>
+
+  <!-- Er row -->
+  <text class="field" x="416" y="216">E_r</text>
+  <text class="shape" x="416" y="239">(N_v, N_r + 1)</text>
+  <text class="small" x="416" y="258">vertex × TM-r plane</text>
+  <g fill="#deedf6" stroke="#7aaac7">
+    <rect x="572" y="190" width="68" height="72"/><rect x="640" y="190" width="68" height="72"/><rect x="708" y="190" width="68" height="72"/><rect x="776" y="190" width="68" height="72"/><rect x="844" y="190" width="68" height="72"/><rect x="912" y="190" width="68" height="72"/><rect x="980" y="190" width="68" height="72"/>
+  </g>
+  <text class="tiny" x="606" y="280" text-anchor="middle">0</text><text class="tiny" x="674" y="280" text-anchor="middle">1</text><text class="tiny" x="1014" y="280" text-anchor="middle">N_r</text>
+  <text class="small" x="1070" y="230">N_v rows</text>
+
+  <!-- Ht row -->
+  <text class="field" x="416" y="320">H_t</text>
+  <text class="shape" x="416" y="343">(N_e, N_r + 1)</text>
+  <text class="small" x="416" y="362">edge × TM-r plane</text>
+  <g fill="#dff1ec" stroke="#75aa9e">
+    <rect x="572" y="294" width="68" height="72"/><rect x="640" y="294" width="68" height="72"/><rect x="708" y="294" width="68" height="72"/><rect x="776" y="294" width="68" height="72"/><rect x="844" y="294" width="68" height="72"/><rect x="912" y="294" width="68" height="72"/><rect x="980" y="294" width="68" height="72"/>
+  </g>
+  <text class="small" x="1070" y="334">N_e rows</text>
+
+  <!-- Et row, shifted midpoints -->
+  <text class="field" x="416" y="424">E_t</text>
+  <text class="shape" x="416" y="447">(N_e, N_r)</text>
+  <text class="small" x="416" y="466">edge × TE-r layer</text>
+  <g fill="#eee7f7" stroke="#9a83bd">
+    <rect x="606" y="398" width="68" height="72"/><rect x="674" y="398" width="68" height="72"/><rect x="742" y="398" width="68" height="72"/><rect x="810" y="398" width="68" height="72"/><rect x="878" y="398" width="68" height="72"/><rect x="946" y="398" width="68" height="72"/>
+  </g>
+  <text class="tiny" x="640" y="488" text-anchor="middle">0</text><text class="tiny" x="708" y="488" text-anchor="middle">1</text><text class="tiny" x="980" y="488" text-anchor="middle">N_r - 1</text>
+  <text class="small" x="1070" y="438">N_e rows</text>
+
+  <!-- Hr row -->
+  <text class="field" x="416" y="528">H_r</text>
+  <text class="shape" x="416" y="551">(N_f, N_r)</text>
+  <text class="small" x="416" y="570">face × TE-r layer</text>
+  <g fill="#f7ead5" stroke="#c89b50">
+    <rect x="606" y="502" width="68" height="72"/><rect x="674" y="502" width="68" height="72"/><rect x="742" y="502" width="68" height="72"/><rect x="810" y="502" width="68" height="72"/><rect x="878" y="502" width="68" height="72"/><rect x="946" y="502" width="68" height="72"/>
+  </g>
+  <text class="small" x="1070" y="542">N_f rows</text>
+
+  <text class="tiny" x="1160" y="630" text-anchor="end">Each colored block represents a complete surface-entity column at one radial position.</text>
+</svg>
