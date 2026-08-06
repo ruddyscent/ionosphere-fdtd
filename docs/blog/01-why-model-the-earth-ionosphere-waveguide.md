@@ -6,17 +6,9 @@ The space between the conducting Earth and the lower ionosphere forms a spherica
 
 This series develops a three-dimensional FDTD model designed for that global problem. Before looking at the grid or the implementation, this first article explains what is being modelled, why it matters, and how the numerical experiment in this repository is assembled.
 
-```mermaid
-flowchart TB
-    I["Lossy lower ionosphere<br/>conductivity increases with altitude"]
-    W["Earth–ionosphere waveguide<br/>global ELF/VLF propagation"]
-    E["Lossy Earth<br/>ocean, crust, and mantle"]
-    S["Localized vertical current<br/>lightning-like excitation"]
-    R["Receivers<br/>arrival, waveform, spectrum"]
-    I --- W
-    W --- E
-    S --> W --> R
-```
+![Cutaway globe showing the lossy Earth and lower ionosphere guiding waves in opposite directions from a localized vertical-current source to a receiver](images/earth-ionosphere-global-waveguide.svg)
+
+*The waveguide is global, closed, and lossy. Eastward and westward signals can travel the same great-circle distance through different material regions, while waves that continue around the planet can expose accumulated numerical error.*
 
 ## The physical system
 
@@ -60,16 +52,9 @@ The final item is as important as the application. A global grid has no harmless
 
 The computational domain is a stack of spherical surfaces. By default it extends from 100 km below sea level to 100 km above it. The lower part captures a lossy Earth; the upper part reaches into the increasingly conductive ionosphere. Tangential electric fields are set to zero at the two radial ends. In normal configurations both terminations lie inside strongly conducting regions, rather than being intended as physical interfaces at exactly $\pm100$ km.
 
-```mermaid
-flowchart LR
-    B0["PEC radial termination<br/>−100 km"]
-    G["Lossy lithosphere<br/>h < 0"]
-    A["Atmospheric waveguide<br/>h ≥ 0"]
-    I["Conductive ionosphere<br/>σ(h) rises exponentially"]
-    B1["PEC radial termination<br/>+100 km"]
-    B0 --- G --- A --- I --- B1
-    S["Radial Gaussian current<br/>default altitude: 2.5 km"] --> A
-```
+![Radial material stack from the lower PEC termination through the lossy lithosphere, atmospheric waveguide, and conductive ionosphere to the upper termination, with a qualitative conductivity profile](images/earth-ionosphere-radial-domain.svg)
+
+*The default source sits just above sea level inside a domain extending from $-100$ to $+100$ km. The numerical end caps lie inside conductive regions; they are not intended to represent sharp physical interfaces at those altitudes.*
 
 The horizontal grid covers the entire globe. It is derived from an icosahedron, recursively subdivided, and projected onto the sphere. Its triangular primal mesh and polygonal dual mesh avoid the polar singularity and extreme cell convergence of a latitude–longitude grid. The construction produces exactly 12 pentagonal dual cells and hexagons everywhere else. Part 2 will explain why this primal–dual pairing is especially useful for integral Maxwell updates.[^randall-2002][^simpson-heikes-taflove-2006]
 
@@ -96,6 +81,10 @@ where $L$ is the subdivision level. Some representative sizes are:
 | 7 | 163,842 | about 60 km |
 | 8 | 655,362 | about 30 km |
 
+![The same illustrative conductivity target sampled on subdivision levels 2, 6, and 8, showing how a feature becomes numerically observable only when several cells resolve it](images/grid-resolution-observability.svg)
+
+*A global wave and a localized material feature impose different resolution requirements. The 20 Hz free-space wavelength is about 15,000 km, but an 80 km structure remains unresolved on a grid whose cell centres are roughly 120 km apart.*
+
 The small defaults are intended for inspection and development, not for resolving a small geological target. The command-line interface warns when a requested anomaly is smaller than the horizontal spacing or radial resolution. This is a numerical observability issue: adding a detailed physical parameter does not make the grid detailed enough to represent it.
 
 The same principle applies in the radial direction. A uniform grid is convenient for global propagation studies. A shallow target may require the optional 1.25 km near-surface refinement, embedded within coarser cells elsewhere. The solver also accepts any strictly increasing custom sequence of radial nodes.
@@ -110,6 +99,10 @@ The state consists of four field components arranged on staggered radial planes:
 - tangential magnetic field $H_t$.
 
 Experiments can inspect a global surface map, a great-circle distance–height section, or a receiver trace. For validation, receiver traces are particularly valuable. Their arrival times expose phase-velocity error, their shape exposes the interaction between the pulse and the waveguide, and spectral ratios between receivers estimate attenuation without requiring the absolute source amplitude to be known.
+
+![Source and receiver paths feeding three diagnostic views: arrival timing, time-domain waveform shape, and frequency-domain spectral ratio](images/receiver-diagnostics.svg)
+
+*Arrival time tests propagation speed and accumulated phase, pulse morphology reveals dispersion and cavity response, and the spectral ratio between receivers estimates path attenuation while cancelling the unknown absolute source amplitude.*
 
 The project can also render the global field directly on the geodesic mesh. The animation below is a repository-generated example rather than a conceptual illustration.
 

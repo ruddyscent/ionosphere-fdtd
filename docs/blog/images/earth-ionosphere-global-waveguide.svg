@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+  <title id="title">The Earth and lower ionosphere form a global electromagnetic waveguide</title>
+  <desc id="desc">A cutaway globe shows a lossy Earth surrounded by a conductive lower ionosphere. A localized vertical-current source launches waves in both directions around the spherical cavity toward a receiver. Three callouts explain the closed geometry, lossy boundaries, and direction-dependent propagation paths.</desc>
+  <defs>
+    <marker id="arrow-blue" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#2878a8"/></marker>
+    <marker id="arrow-purple" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#7453a6"/></marker>
+    <radialGradient id="earth" cx="37%" cy="30%" r="72%"><stop offset="0" stop-color="#dbeaf1"/><stop offset="0.7" stop-color="#9fc0cf"/><stop offset="1" stop-color="#6e94a8"/></radialGradient>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .panel-title { font: 700 18px Inter, ui-sans-serif, system-ui, sans-serif; fill: #243548; }
+      .label { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #30455a; }
+      .small { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5b6d80; }
+      .tiny { font: 400 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #65778a; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="660" fill="#fff"/>
+  <text class="title" x="40" y="45">The planet is part of the electromagnetic structure</text>
+  <text class="subtitle" x="40" y="71">ELF/VLF energy is guided through the spherical cavity between a lossy Earth and the increasingly conductive lower ionosphere.</text>
+
+  <!-- Global cavity -->
+  <rect x="32" y="98" width="700" height="514" rx="20" fill="#f6fafe" stroke="#a8c5d8"/>
+  <circle cx="355" cy="355" r="238" fill="#fbf6e9" stroke="#c6a051" stroke-width="18" opacity="0.9"/>
+  <circle cx="355" cy="355" r="201" fill="url(#earth)" stroke="#52758a" stroke-width="3"/>
+  <path d="M190 274 Q240 222 291 244 Q319 260 343 243 Q379 217 424 239 Q475 265 518 247" fill="none" stroke="#6e8f6b" stroke-width="7" stroke-linecap="round" opacity="0.8"/>
+  <path d="M202 424 Q258 391 309 410 Q354 428 398 405 Q447 381 503 418" fill="none" stroke="#6e8f6b" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- Cavity label -->
+  <path d="M354 119 L354 144" stroke="#647689" stroke-width="1.5"/>
+  <text class="label" x="355" y="112" text-anchor="middle">lossy lower ionosphere</text>
+  <text class="tiny" x="355" y="133" text-anchor="middle">conductivity rises with altitude</text>
+  <rect x="292" y="145" width="126" height="29" rx="14" fill="#fff" stroke="#d3b86c"/>
+  <text class="small" x="355" y="164" text-anchor="middle">guided cavity</text>
+
+  <!-- Source and receiver -->
+  <g transform="translate(218 181)">
+    <path d="M0 0 L-12 29 L3 25 L-8 55 L28 12 L10 17 L18 0 Z" fill="#d39126" stroke="#fff" stroke-width="2"/>
+    <path d="M7 48 L7 67" stroke="#b76d19" stroke-width="4"/>
+  </g>
+  <text class="label" x="52" y="190">localized vertical current</text>
+  <text class="tiny" x="52" y="207">lightning-like source</text>
+  <g transform="translate(486 464)">
+    <path d="M0 38 L0 0 M-13 12 L0 0 L13 12 M-18 38 L18 38" fill="none" stroke="#263f54" stroke-width="4" stroke-linecap="round"/>
+    <path d="M-23 -2 Q0 -24 23 -2 M-15 5 Q0 -10 15 5" fill="none" stroke="#2878a8" stroke-width="2"/>
+  </g>
+  <text class="label" x="522" y="510">receiver</text>
+
+  <!-- Bidirectional paths -->
+  <path d="M231 219 C331 125 510 190 555 318 C581 391 548 447 505 477" fill="none" stroke="#2878a8" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
+  <path d="M219 226 C105 316 134 484 264 550 C356 597 455 548 487 495" fill="none" stroke="#7453a6" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow-purple)"/>
+  <rect x="477" y="211" width="119" height="27" rx="13" fill="#e1f0f8"/>
+  <text class="small" x="537" y="229" text-anchor="middle" fill="#286f9a">eastward path</text>
+  <rect x="150" y="468" width="127" height="27" rx="13" fill="#eee8f7"/>
+  <text class="small" x="214" y="486" text-anchor="middle" fill="#684695">westward path</text>
+  <text class="small" x="355" y="575" text-anchor="middle">lossy Earth · ocean, crust, and mantle</text>
+
+  <!-- Why global modelling matters -->
+  <rect x="764" y="98" width="404" height="150" rx="18" fill="#f7fafc" stroke="#becbd7"/>
+  <circle cx="808" cy="143" r="22" fill="#deedf6"/><text class="panel-title" x="808" y="150" text-anchor="middle" fill="#2878a8">1</text>
+  <text class="panel-title" x="845" y="139">Closed global geometry</text>
+  <text class="small" x="845" y="164">Waves can circumnavigate the planet, meet near</text>
+  <text class="small" x="845" y="183">the antipode, and revisit the source region.</text>
+  <text class="small" x="845" y="212">There is no harmless outer boundary.</text>
+
+  <rect x="764" y="266" width="404" height="150" rx="18" fill="#f7fbf9" stroke="#9abfaf"/>
+  <circle cx="808" cy="311" r="22" fill="#dff1e9"/><text class="panel-title" x="808" y="318" text-anchor="middle" fill="#3d806f">2</text>
+  <text class="panel-title" x="845" y="307">Two lossy boundaries</text>
+  <text class="small" x="845" y="332">Ground and ionosphere jointly control attenuation,</text>
+  <text class="small" x="845" y="351">phase velocity, pulse shape, and resonances.</text>
+  <text class="small" x="845" y="380">Neither boundary is perfectly uniform.</text>
+
+  <rect x="764" y="434" width="404" height="178" rx="18" fill="#fbf9fe" stroke="#b7a5d1"/>
+  <circle cx="808" cy="479" r="22" fill="#eee8f7"/><text class="panel-title" x="808" y="486" text-anchor="middle" fill="#7453a6">3</text>
+  <text class="panel-title" x="845" y="475">Direction-dependent paths</text>
+  <text class="small" x="845" y="500">Equal great-circle distance does not imply an equal</text>
+  <text class="small" x="845" y="519">channel: east and west paths cross different ocean,</text>
+  <text class="small" x="845" y="538">crustal, atmospheric, and ionospheric regions.</text>
+  <rect x="838" y="558" width="278" height="32" rx="11" fill="#f1ecf7"/>
+  <text class="label" x="977" y="579" text-anchor="middle">local flat model ≠ global experiment</text>
+</svg>

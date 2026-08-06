@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+  <title id="title">Grid resolution determines whether a physical feature is numerically observable</title>
+  <desc id="desc">Three panels place the same illustrative 80 kilometre conductivity anomaly on subdivision levels 2, 6, and 8. At 1910 kilometre spacing the anomaly falls inside one enormous cell, at 120 kilometre spacing it remains smaller than the spacing, and at 30 kilometre spacing it covers several samples. A scale bar contrasts the 15000 kilometre free-space wavelength at 20 hertz with much smaller material structures.</desc>
+  <defs>
+    <pattern id="coarse" width="210" height="182" patternUnits="userSpaceOnUse"><path d="M0 182 L105 0 L210 182 Z M0 0 L105 182 L210 0" fill="none" stroke="#6e9ab2" stroke-width="3"/></pattern>
+    <pattern id="medium" width="72" height="62" patternUnits="userSpaceOnUse"><path d="M0 62 L36 0 L72 62 Z M0 0 L36 62 L72 0" fill="none" stroke="#6e9ab2" stroke-width="1.7"/></pattern>
+    <pattern id="fine" width="28" height="24" patternUnits="userSpaceOnUse"><path d="M0 24 L14 0 L28 24 Z M0 0 L14 24 L28 0" fill="none" stroke="#6e9ab2" stroke-width="1"/></pattern>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .panel-title { font: 700 19px Inter, ui-sans-serif, system-ui, sans-serif; fill: #243548; }
+      .label { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #30455a; }
+      .small { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5b6d80; }
+      .tiny { font: 400 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #65778a; }
+      .formula { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #394e63; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="660" fill="#fff"/>
+  <text class="title" x="40" y="45">A parameter is not resolved until the grid can sample it</text>
+  <text class="subtitle" x="40" y="71">Long ELF wavelengths set one scale; localized geology, coastlines, and shallow layers can demand a much finer one.</text>
+
+  <!-- Scale context -->
+  <rect x="34" y="98" width="1132" height="86" rx="16" fill="#f7fafc" stroke="#becbd7"/>
+  <text class="label" x="61" y="127">20 Hz in free space</text>
+  <line x1="218" y1="132" x2="1106" y2="132" stroke="#2878a8" stroke-width="5" stroke-linecap="round"/>
+  <line x1="218" y1="120" x2="218" y2="145" stroke="#2878a8" stroke-width="3"/>
+  <line x1="1106" y1="120" x2="1106" y2="145" stroke="#2878a8" stroke-width="3"/>
+  <text class="formula" x="662" y="123" text-anchor="middle">λ₀ ≈ 15,000 km</text>
+  <text class="small" x="61" y="158">A small target may still be invisible even when a global wave is represented.</text>
+  <rect x="942" y="148" width="164" height="23" rx="9" fill="#fff1d6"/>
+  <text class="tiny" x="1024" y="164" text-anchor="middle" fill="#946615">illustrative target: 80 km</text>
+
+  <!-- Level 2 -->
+  <rect x="34" y="210" width="352" height="330" rx="18" fill="#f6fafe" stroke="#a8c5d8"/>
+  <text class="panel-title" x="58" y="245">Subdivision 2 · 162 cells</text>
+  <text class="formula" x="58" y="270">centre spacing ≈ 1,910 km</text>
+  <rect x="58" y="291" width="304" height="170" rx="10" fill="url(#coarse)" stroke="#7898aa"/>
+  <circle cx="249" cy="368" r="9" fill="#d39126" stroke="#fff" stroke-width="3"/>
+  <line x1="249" y1="368" x2="324" y2="329" stroke="#b58628" stroke-width="1.5"/>
+  <text class="tiny" x="326" y="326" fill="#946615">80 km target</text>
+  <rect x="61" y="478" width="298" height="41" rx="11" fill="#f6e7e1"/>
+  <text class="label" x="210" y="497" text-anchor="middle" fill="#9b4f3d">not localized by the grid</text>
+  <text class="tiny" x="210" y="513" text-anchor="middle">one cell represents a vast region</text>
+
+  <!-- Level 6 -->
+  <rect x="424" y="210" width="352" height="330" rx="18" fill="#f7fbf9" stroke="#9abfaf"/>
+  <text class="panel-title" x="448" y="245">Subdivision 6 · 40,962 cells</text>
+  <text class="formula" x="448" y="270">centre spacing ≈ 120 km</text>
+  <rect x="448" y="291" width="304" height="170" rx="10" fill="url(#medium)" stroke="#7898aa"/>
+  <circle cx="609" cy="373" r="15" fill="#d39126" fill-opacity="0.82" stroke="#fff" stroke-width="3"/>
+  <line x1="609" y1="373" x2="688" y2="332" stroke="#b58628" stroke-width="1.5"/>
+  <text class="tiny" x="690" y="329" fill="#946615">same 80 km target</text>
+  <rect x="451" y="478" width="298" height="41" rx="11" fill="#fbf1dc"/>
+  <text class="label" x="600" y="497" text-anchor="middle" fill="#946615">smaller than the spacing</text>
+  <text class="tiny" x="600" y="513" text-anchor="middle">a warning is still warranted</text>
+
+  <!-- Level 8 -->
+  <rect x="814" y="210" width="352" height="330" rx="18" fill="#fbf9fe" stroke="#b7a5d1"/>
+  <text class="panel-title" x="838" y="245">Subdivision 8 · 655,362 cells</text>
+  <text class="formula" x="838" y="270">centre spacing ≈ 30 km</text>
+  <rect x="838" y="291" width="304" height="170" rx="10" fill="url(#fine)" stroke="#7898aa"/>
+  <circle cx="988" cy="373" r="35" fill="#d39126" fill-opacity="0.48" stroke="#b87918" stroke-width="3"/>
+  <circle cx="974" cy="361" r="4" fill="#8e5e13"/><circle cx="1002" cy="361" r="4" fill="#8e5e13"/><circle cx="960" cy="385" r="4" fill="#8e5e13"/><circle cx="988" cy="385" r="4" fill="#8e5e13"/><circle cx="1016" cy="385" r="4" fill="#8e5e13"/>
+  <line x1="1009" y1="346" x2="1080" y2="323" stroke="#b58628" stroke-width="1.5"/>
+  <text class="tiny" x="1082" y="320" fill="#946615">same target</text>
+  <rect x="841" y="478" width="298" height="41" rx="11" fill="#e4f2ec"/>
+  <text class="label" x="990" y="497" text-anchor="middle" fill="#3d806f">sampled by several cells</text>
+  <text class="tiny" x="990" y="513" text-anchor="middle">location and extent begin to exist numerically</text>
+
+  <path d="M211 556 L211 580 L989 580 L989 556" fill="none" stroke="#647689" stroke-width="1.5"/>
+  <rect x="259" y="564" width="682" height="60" rx="14" fill="#eef3f7" stroke="#c7d3de"/>
+  <text class="label" x="600" y="589" text-anchor="middle">More physical detail does not compensate for insufficient numerical resolution</text>
+  <text class="small" x="600" y="610" text-anchor="middle">Horizontal spacing and radial cell thickness must both be compared with the feature being represented.</text>
+</svg>

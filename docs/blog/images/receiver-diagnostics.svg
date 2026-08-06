@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+  <title id="title">Receiver traces diagnose propagation in three complementary ways</title>
+  <desc id="desc">A source and two receivers feed three diagnostic panels. Arrival-time differences estimate phase velocity, waveform shape and tail reveal dispersion and cavity response, and a spectral amplitude ratio estimates path attenuation without requiring absolute source amplitude.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#647689"/></marker>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .panel-title { font: 700 19px Inter, ui-sans-serif, system-ui, sans-serif; fill: #243548; }
+      .label { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #30455a; }
+      .small { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5b6d80; }
+      .tiny { font: 400 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #65778a; }
+      .formula { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #394e63; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="660" fill="#fff"/>
+  <text class="title" x="40" y="45">One receiver trace supports several different tests</text>
+  <text class="subtitle" x="40" y="71">Time-domain timing and shape test propagation; frequency-domain ratios isolate attenuation along the path.</text>
+
+  <!-- Source-path-receivers strip -->
+  <rect x="34" y="98" width="1132" height="142" rx="18" fill="#f7fafc" stroke="#becbd7"/>
+  <circle cx="99" cy="165" r="22" fill="#fff1d6" stroke="#d39126" stroke-width="2"/>
+  <path d="M99 190 L99 143" stroke="#b76d19" stroke-width="4" marker-end="url(#arrow)"/>
+  <text class="label" x="99" y="219" text-anchor="middle">source</text>
+  <path d="M129 166 C294 94 495 94 662 166" fill="none" stroke="#2878a8" stroke-width="4"/>
+  <path d="M129 174 C367 254 668 251 926 166" fill="none" stroke="#7453a6" stroke-width="4"/>
+  <circle cx="662" cy="166" r="12" fill="#2878a8" stroke="#fff" stroke-width="3"/>
+  <circle cx="926" cy="166" r="12" fill="#7453a6" stroke="#fff" stroke-width="3"/>
+  <text class="label" x="662" y="199" text-anchor="middle">receiver A</text>
+  <text class="label" x="926" y="199" text-anchor="middle">receiver B</text>
+  <rect x="277" y="101" width="228" height="24" rx="10" fill="#f7fafc" opacity="0.94"/>
+  <text class="small" x="391" y="118" text-anchor="middle" fill="#286f9a">shorter great-circle path · distance dA</text>
+  <rect x="445" y="210" width="184" height="24" rx="10" fill="#f7fafc" opacity="0.94"/>
+  <text class="small" x="537" y="227" text-anchor="middle" fill="#684695">longer path · distance dB</text>
+  <rect x="514" y="244" width="172" height="23" rx="10" fill="#eef3f7" stroke="#c7d3de"/>
+  <text class="tiny" x="600" y="260" text-anchor="middle">receiver traces E_r(t)</text>
+
+  <!-- Timing panel -->
+  <rect x="34" y="278" width="352" height="294" rx="18" fill="#f6fafe" stroke="#a8c5d8"/>
+  <text class="panel-title" x="58" y="315">1 · Arrival time</text>
+  <text class="small" x="58" y="337">When does the pulse reach each receiver?</text>
+  <path d="M69 447 L348 447 M69 447 L69 364" fill="none" stroke="#788997" stroke-width="1.5"/>
+  <path d="M72 443 C123 443 126 442 145 438 C158 432 163 384 177 373 C191 387 193 430 207 438 C225 445 270 443 344 443" fill="none" stroke="#2878a8" stroke-width="3"/>
+  <path d="M72 451 C190 451 201 450 220 446 C233 440 238 403 252 392 C265 405 270 439 284 446 C298 451 319 451 344 451" fill="none" stroke="#7453a6" stroke-width="3"/>
+  <line x1="177" y1="358" x2="177" y2="471" stroke="#2878a8" stroke-dasharray="4 4"/>
+  <line x1="252" y1="378" x2="252" y2="471" stroke="#7453a6" stroke-dasharray="4 4"/>
+  <text class="tiny" x="177" y="484" text-anchor="middle">tA</text><text class="tiny" x="252" y="484" text-anchor="middle">tB</text>
+  <text class="tiny" x="342" y="463" text-anchor="end">time</text>
+  <rect x="72" y="502" width="276" height="46" rx="11" fill="#deedf6"/>
+  <text class="label" x="210" y="522" text-anchor="middle">arrival ordering and delay</text>
+  <text class="tiny" x="210" y="539" text-anchor="middle">phase velocity · accumulated phase error</text>
+
+  <!-- Shape panel -->
+  <rect x="424" y="278" width="352" height="294" rx="18" fill="#f7fbf9" stroke="#9abfaf"/>
+  <text class="panel-title" x="448" y="315">2 · Waveform shape</text>
+  <text class="small" x="448" y="337">How does the cavity reshape the pulse?</text>
+  <path d="M459 447 L738 447 M459 447 L459 364" fill="none" stroke="#788997" stroke-width="1.5"/>
+  <path d="M462 443 C501 443 514 441 529 434 C540 427 547 373 562 365 C577 374 580 431 596 438 C608 443 615 416 628 407 C641 413 647 432 657 438 C672 447 682 424 695 426 C711 428 720 440 735 442" fill="none" stroke="#3d806f" stroke-width="3"/>
+  <path d="M608 389 L608 459" stroke="#7fae9f" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text class="tiny" x="570" y="359">main pulse</text>
+  <text class="tiny" x="660" y="400">overshoot and tail</text>
+  <text class="tiny" x="732" y="463" text-anchor="end">time</text>
+  <rect x="462" y="502" width="276" height="46" rx="11" fill="#dff1e9"/>
+  <text class="label" x="600" y="522" text-anchor="middle">pulse morphology</text>
+  <text class="tiny" x="600" y="539" text-anchor="middle">dispersion · reflections · waveguide response</text>
+
+  <!-- Spectrum panel -->
+  <rect x="814" y="278" width="352" height="294" rx="18" fill="#fbf9fe" stroke="#b7a5d1"/>
+  <text class="panel-title" x="838" y="315">3 · Spectral ratio</text>
+  <text class="small" x="838" y="337">How quickly does energy decay with distance?</text>
+  <path d="M849 447 L1128 447 M849 447 L849 364" fill="none" stroke="#788997" stroke-width="1.5"/>
+  <path d="M852 382 C888 388 917 393 946 401 C984 410 1020 416 1053 426 C1085 434 1103 439 1125 443" fill="none" stroke="#2878a8" stroke-width="3"/>
+  <path d="M852 406 C891 413 920 420 950 428 C985 436 1022 440 1055 444 C1081 447 1105 449 1125 451" fill="none" stroke="#7453a6" stroke-width="3"/>
+  <text class="tiny" x="864" y="378" fill="#286f9a">|EA(f)|</text>
+  <text class="tiny" x="864" y="422" fill="#684695">|EB(f)|</text>
+  <text class="tiny" x="1125" y="463" text-anchor="end">frequency</text>
+  <rect x="852" y="490" width="276" height="58" rx="11" fill="#eee8f7"/>
+  <text class="formula" x="990" y="514" text-anchor="middle">α(f) ∝ ln(|EA| / |EB|)</text>
+  <text class="tiny" x="990" y="536" text-anchor="middle">source amplitude cancels in the ratio</text>
+
+  <rect x="194" y="601" width="812" height="39" rx="12" fill="#eef3f7" stroke="#c7d3de"/>
+  <text class="label" x="600" y="626" text-anchor="middle">A plausible animation is useful; receiver diagnostics make quantitative validation possible.</text>
+</svg>
