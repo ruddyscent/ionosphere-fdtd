@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">GPU observation cadence and synchronization</title>
+  <desc id="desc">A bad timeline copies or reads a GPU value after every step, forcing frequent host synchronization. A better timeline lets many device steps and device-native trace writes run together, then synchronizes and copies only a requested batch, frame, diagnostic, or final result.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#647689"/></marker>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .panel-title { font: 700 20px Inter, ui-sans-serif, system-ui, sans-serif; fill: #243548; }
+      .lane { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #33495e; }
+      .box { font: 700 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #30455a; }
+      .small { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5b6d80; }
+      .tiny { font: 400 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #65778a; }
+      .badge { font: 700 12px Inter, ui-sans-serif, system-ui, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="680" fill="#fff"/>
+  <text class="title" x="40" y="45">Observation cadence can serialize an otherwise fast GPU loop</text>
+  <text class="subtitle" x="40" y="71">Device execution is asynchronous with respect to the host until a requested value or explicit synchronization makes the host wait.</text>
+
+  <!-- Bad path -->
+  <rect x="34" y="98" width="1132" height="232" rx="18" fill="#fdf8f7" stroke="#d4a29c" stroke-width="1.5"/>
+  <text class="panel-title" x="58" y="132">Avoid · read a host value after every step</text>
+  <text class="lane" x="58" y="180">CPU</text>
+  <text class="lane" x="58" y="258">GPU</text>
+  <line x1="126" y1="173" x2="1120" y2="173" stroke="#d7c4c2"/>
+  <line x1="126" y1="251" x2="1120" y2="251" stroke="#d7c4c2"/>
+
+  <g>
+    <rect x="150" y="230" width="126" height="42" rx="8" fill="#e5ddf1" stroke="#8062a9"/><text class="box" x="213" y="256" text-anchor="middle">field step 1</text>
+    <rect x="402" y="230" width="126" height="42" rx="8" fill="#e5ddf1" stroke="#8062a9"/><text class="box" x="465" y="256" text-anchor="middle">field step 2</text>
+    <rect x="654" y="230" width="126" height="42" rx="8" fill="#e5ddf1" stroke="#8062a9"/><text class="box" x="717" y="256" text-anchor="middle">field step 3</text>
+    <rect x="906" y="230" width="126" height="42" rx="8" fill="#e5ddf1" stroke="#8062a9"/><text class="box" x="969" y="256" text-anchor="middle">field step 4</text>
+  </g>
+  <g>
+    <rect x="286" y="150" width="104" height="45" rx="8" fill="#f4deda" stroke="#bd6b62"/><text class="box" x="338" y="169" text-anchor="middle">.cpu() / .item()</text><text class="tiny" x="338" y="186" text-anchor="middle">host waits</text>
+    <rect x="538" y="150" width="104" height="45" rx="8" fill="#f4deda" stroke="#bd6b62"/><text class="box" x="590" y="169" text-anchor="middle">diagnostic</text><text class="tiny" x="590" y="186" text-anchor="middle">host waits</text>
+    <rect x="790" y="150" width="104" height="45" rx="8" fill="#f4deda" stroke="#bd6b62"/><text class="box" x="842" y="169" text-anchor="middle">render frame</text><text class="tiny" x="842" y="186" text-anchor="middle">host waits</text>
+    <rect x="1042" y="150" width="92" height="45" rx="8" fill="#f4deda" stroke="#bd6b62"/><text class="box" x="1088" y="169" text-anchor="middle">scalar read</text><text class="tiny" x="1088" y="186" text-anchor="middle">host waits</text>
+  </g>
+  <g stroke="#bd6b62" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)">
+    <path d="M276 251 C306 251 298 197 326 197"/><path d="M528 251 C558 251 550 197 578 197"/><path d="M780 251 C810 251 802 197 830 197"/><path d="M1032 251 C1060 251 1056 197 1078 197"/>
+  </g>
+  <text class="small" x="600" y="307" text-anchor="middle">Frequent barriers prevent a long queue of device work and can make measurement overhead dominate the solver.</text>
+
+  <!-- Good path -->
+  <rect x="34" y="356" width="1132" height="260" rx="18" fill="#f6fbf9" stroke="#91bdae" stroke-width="1.5"/>
+  <text class="panel-title" x="58" y="390">Prefer · record on device, observe at an intentional cadence</text>
+  <text class="lane" x="58" y="443">CPU</text>
+  <text class="lane" x="58" y="525">GPU</text>
+  <line x1="126" y1="436" x2="1120" y2="436" stroke="#c4d8d1"/>
+  <line x1="126" y1="518" x2="1120" y2="518" stroke="#c4d8d1"/>
+
+  <rect x="150" y="414" width="500" height="44" rx="9" fill="#eef3f7" stroke="#b7c4cf"/>
+  <text class="box" x="400" y="434" text-anchor="middle">Python schedules steps and updates counters</text>
+  <text class="tiny" x="400" y="451" text-anchor="middle">no field value requested</text>
+
+  <g fill="#e5ddf1" stroke="#8062a9">
+    <rect x="150" y="495" width="96" height="46" rx="8"/><rect x="256" y="495" width="96" height="46" rx="8"/><rect x="362" y="495" width="96" height="46" rx="8"/><rect x="468" y="495" width="96" height="46" rx="8"/><rect x="574" y="495" width="96" height="46" rx="8"/>
+  </g>
+  <g class="box" text-anchor="middle">
+    <text x="198" y="523">step</text><text x="304" y="523">step</text><text x="410" y="523">step</text><text x="516" y="523">step</text><text x="622" y="523">step</text>
+  </g>
+  <g fill="#dff1ec" stroke="#5d9b89">
+    <rect x="166" y="549" width="64" height="26" rx="7"/><rect x="272" y="549" width="64" height="26" rx="7"/><rect x="378" y="549" width="64" height="26" rx="7"/><rect x="484" y="549" width="64" height="26" rx="7"/><rect x="590" y="549" width="64" height="26" rx="7"/>
+  </g>
+  <g class="tiny" text-anchor="middle">
+    <text x="198" y="567">trace</text><text x="304" y="567">trace</text><text x="410" y="567">trace</text><text x="516" y="567">trace</text><text x="622" y="567">trace</text>
+  </g>
+
+  <rect x="702" y="495" width="174" height="80" rx="11" fill="#dff1ec" stroke="#5d9b89"/>
+  <text class="box" x="789" y="520" text-anchor="middle">device-native buffer</text>
+  <text class="small" x="789" y="542" text-anchor="middle">sampled traces</text>
+  <text class="tiny" x="789" y="561" text-anchor="middle">many steps per batch</text>
+  <path d="M670 545 L700 545" stroke="#5d9b89" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="916" y="414" width="204" height="70" rx="11" fill="#f7f1df" stroke="#c6a051"/>
+  <text class="box" x="1018" y="438" text-anchor="middle">explicit observation point</text>
+  <text class="small" x="1018" y="459" text-anchor="middle">synchronize + copy batch,</text>
+  <text class="small" x="1018" y="476" text-anchor="middle">frame, diagnostic, or final state</text>
+  <path d="M876 535 C930 535 900 485 955 485" fill="none" stroke="#b58628" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
+
+  <rect x="178" y="590" width="824" height="22" rx="11" fill="#dff1ec"/>
+  <text class="badge" x="590" y="606" text-anchor="middle" fill="#287d6b">simulation cadence ≠ observation cadence · synchronize only when the host needs evidence</text>
+
+  <text class="tiny" x="1160" y="660" text-anchor="end">Periodic synchronization still has a cost; batching controls how often that cost interrupts device execution.</text>
+</svg>

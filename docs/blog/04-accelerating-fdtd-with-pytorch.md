@@ -72,17 +72,25 @@ vertex_values[edges[:, 1]] - vertex_values[edges[:, 0]]
 face_values[left_faces] - face_values[right_faces]
 ```
 
-Triangular face circulation gathers one edge column at a time, multiplies by its sign, and accumulates in place. Because every primal face has exactly three edges, the operation has a fixed structure that works well in a static graph.
+Triangular face circulation gathers one edge column at a time, multiplies by its sign in place, and accumulates the next two signed columns with `add_`. Because every primal face has exactly three edges, the operation has a fixed structure that works well in a static graph.
 
-Dual-cell circulation uses `index_add_`, PyTorch's indexed accumulation operation:[^torch-index-add]
+Dual-cell circulation uses the same deterministic padded degree-six incidence table as the current NumPy backend. Each slot gathers a complete tensor, applies its sign with `mul_`, and accumulates with `add_`:[^torch-backend-source]
 
 ```python
-result = torch.zeros(output_shape, dtype=edge_values.dtype, device=device)
-result.index_add_(0, edges[:, 0], edge_values)
-result.index_add_(0, edges[:, 1], edge_values, alpha=-1.0)
+sign_shape = (n_vertices,) + (1,) * (edge_values.ndim - 1)
+result = edge_values[vertex_edges[:, 0]]
+result.mul_(vertex_edge_signs[:, 0].reshape(sign_shape))
+for slot in range(1, vertex_edges.shape[1]):
+    term = edge_values[vertex_edges[:, slot]]
+    term.mul_(vertex_edge_signs[:, slot].reshape(sign_shape))
+    result.add_(term)
 ```
 
-Each oriented edge contributes positively to its tail dual cell and negatively to its head dual cell. Unlike the NumPy backend's padded degree-six gather, this is a device scatter reduction. The two forms implement the same topological incidence operator, and the cross-backend tests verify that equivalence through the complete solver.
+Each oriented edge still contributes positively to its tail dual cell and negatively to its head dual cell. The incidence table stores that orientation as signs; a pentagon's unused sixth slot has sign zero. The fixed slot order is bitwise repeatable on CUDA and avoids the order-dependent collisions of an atomic scatter reduction. Cross-backend tests verify the same topological operator through the complete solver.[^backend-tests]
+
+![PyTorch topology kernel diagram showing device-resident incidence tables, three signed face gathers, and six deterministic dual-cell gathers accumulated with in-place tensor operations](images/pytorch-topology-kernel.svg)
+
+*The loop count is fixed by topology, not by grid size. Each of the three or six iterations operates on every face or vertex and all trailing radial values at once; `torch.compile` can therefore capture a static tensor program.*
 
 ## Eager execution and compilation
 
@@ -110,12 +118,11 @@ torch.compile(step, fullgraph=True, dynamic=False)
 
 Compilation has a warm-up cost. It should not be assumed faster for the 42- or 162-cell development grids. Its value appears when enough work follows the initial compile or when the grid is large enough to amortize dispatch overhead.
 
-```mermaid
-flowchart LR
-    P["Prepare fixed-shape tensors"] --> C["Compile first field step"]
-    C --> U1["Update 1"] --> U2["Update 2"] --> Un["Update N"]
-    C -. "one-time warm-up cost" .-> U1
-```
+The following timeline makes the execution boundary explicit. Eager mode enters PyTorch for each tensor operation. Compiled mode pays capture and compilation cost on its first invocation, then the outer Python time loop calls one compiled field graph per step. Counters and simulation time remain outside that graph.[^torch-backend-source][^solver-source]
+
+![Timeline comparing PyTorch eager operation-by-operation dispatch with first-call graph capture and repeated execution of a compiled fixed-shape FDTD field step](images/pytorch-eager-compiled-timeline.svg)
+
+*Compilation can fuse or reschedule compatible work, but it does not promise that every operation becomes one kernel. The durable change is the optimization boundary: the compiler sees the complete tensor-only field update.*
 
 ## Measured throughput on one CPU–GPU workstation
 
@@ -153,6 +160,10 @@ uv run --extra pytorch ionosphere \
   --torch-compile --steps 35000
 ```
 
+![Decision map for choosing PyTorch CPU, Apple MPS, or NVIDIA CUDA and validating float32 or float64 for the intended observable](images/pytorch-device-dtype-map.svg)
+
+*Device choice determines available precision and execution policy. Dtype choice still requires an accuracy check against the field, attenuation, phase, or arrival-time quantity that the run is intended to measure.*
+
 Single precision halves field storage relative to double precision and usually improves accelerator throughput. It is not always the dominant source of error, however. In the repository's global validation, a matched CUDA `float64` run changed the early attenuation error negligibly relative to MPS `float32`; correcting the ionospheric profile and spectral window mattered far more. Later production verification still used CUDA double precision so that remaining residuals could not be attributed casually to arithmetic precision.
 
 This is the right way to reason about dtype: test it against the observable of interest rather than assuming either “float32 is enough” or “float64 fixes the physics.” PyTorch likewise cautions that floating-point precision is finite and that mathematically identical operations need not be bitwise identical across execution paths or platforms.[^pytorch-numerical-accuracy]
@@ -181,7 +192,11 @@ er_on_host = simulation.to_numpy(simulation.er)
 value = simulation.field_value("er", vertex, layer)
 ```
 
-Visualization copies tensors to the CPU only when a frame is rendered. Receiver recording can accumulate observations in backend-native storage and synchronize periodically rather than after every scalar sample. Diagnostics synchronize only when values such as a maximum norm are requested.
+Visualization copies tensors to the CPU only when a frame is rendered. Receiver recording can accumulate observations in backend-native storage and synchronize periodically rather than after every scalar sample. Diagnostics synchronize only when values such as a maximum norm are requested.[^solver-source]
+
+![CPU and GPU timelines contrasting per-step host reads that force synchronization with device-native trace buffering and intentional batched observation](images/pytorch-observation-synchronization.svg)
+
+*A synchronization point is sometimes necessary; the optimization is to choose its cadence. Traces can stay device-native across many steps, while frames, scalar diagnostics, or final arrays cross to the host only when requested.*
 
 This separation between simulation cadence and observation cadence is a general GPU lesson: an efficient kernel can still be surrounded by an inefficient measurement loop.
 
@@ -257,13 +272,13 @@ The next natural work is not another backend. It is improving the model and its 
 
 [^torch-compile]: PyTorch Contributors, “[`torch.compile`](https://docs.pytorch.org/docs/stable/generated/torch.compile.html),” *PyTorch API reference*, accessed 2026-08-06.
 
-[^torch-index-add]: PyTorch Contributors, “[`torch.index_add`](https://docs.pytorch.org/docs/stable/generated/torch.index_add.html),” *PyTorch API reference*, accessed 2026-08-06.
-
 [^pytorch-numerical-accuracy]: PyTorch Contributors, “[Numerical accuracy](https://docs.pytorch.org/docs/stable/notes/numerical_accuracy.html),” *PyTorch documentation*, accessed 2026-08-06.
 
 [^torch-threads]: PyTorch Contributors, “[`torch.set_num_threads`](https://docs.pytorch.org/docs/stable/generated/torch.set_num_threads.html),” *PyTorch API reference*, accessed 2026-08-06.
 
 [^torch-backend-source]: Ionosphere FDTD project, “[PyTorch backend implementation](../../src/ionosphere_fdtd/backends/torch_backend.py).”
+
+[^solver-source]: Ionosphere FDTD project, “[Solver time-step and observation implementation](../../src/ionosphere_fdtd/solver.py).”
 
 [^backend-tests]: Ionosphere FDTD project, “[Backend equivalence, device-policy, and compilation tests](../../tests/test_backends.py).”
 

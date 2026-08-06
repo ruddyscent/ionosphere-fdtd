@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">PyTorch eager and compiled FDTD execution timelines</title>
+  <desc id="desc">Eager execution dispatches each tensor operation from Python to a device kernel. Compiled execution first captures and compiles one complete fixed-shape field step, then the Python time loop invokes that compiled graph once per step. Compilation adds warm-up cost but can reduce steady-state dispatch and optimize kernel scheduling.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#647689"/></marker>
+    <style>
+      .title { font: 700 28px Inter, ui-sans-serif, system-ui, sans-serif; fill: #172333; }
+      .subtitle { font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536273; }
+      .panel-title { font: 700 20px Inter, ui-sans-serif, system-ui, sans-serif; fill: #243548; }
+      .lane { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #33495e; }
+      .box { font: 700 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #30455a; }
+      .small { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5b6d80; }
+      .tiny { font: 400 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #65778a; }
+      .formula { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #394e63; }
+      .badge { font: 700 12px Inter, ui-sans-serif, system-ui, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="700" fill="#fff"/>
+  <text class="title" x="40" y="45">Compilation changes the dispatch boundary, not Maxwell's equations</text>
+  <text class="subtitle" x="40" y="71">The outer Python time loop remains; one call now enters a captured field-step graph instead of dispatching each tensor op separately.</text>
+
+  <!-- Eager panel -->
+  <rect x="34" y="96" width="1132" height="242" rx="18" fill="#f7fafc" stroke="#b7c7d5" stroke-width="1.5"/>
+  <text class="panel-title" x="58" y="130">Eager · immediate operation-by-operation dispatch</text>
+  <text class="lane" x="58" y="176">Python</text>
+  <text class="lane" x="58" y="260">device</text>
+  <line x1="140" y1="168" x2="1120" y2="168" stroke="#c6d0da"/>
+  <line x1="140" y1="252" x2="1120" y2="252" stroke="#c6d0da"/>
+
+  <rect x="154" y="145" width="94" height="42" rx="8" fill="#e5f1f8" stroke="#78a8c5"/><text class="box" x="201" y="171" text-anchor="middle">gather()</text>
+  <rect x="273" y="145" width="94" height="42" rx="8" fill="#e5f1f8" stroke="#78a8c5"/><text class="box" x="320" y="171" text-anchor="middle">mul_()</text>
+  <rect x="392" y="145" width="94" height="42" rx="8" fill="#e5f1f8" stroke="#78a8c5"/><text class="box" x="439" y="171" text-anchor="middle">add_()</text>
+  <rect x="511" y="145" width="94" height="42" rx="8" fill="#eee8f7" stroke="#9478b7"/><text class="box" x="558" y="171" text-anchor="middle">diff()</text>
+  <rect x="630" y="145" width="94" height="42" rx="8" fill="#eee8f7" stroke="#9478b7"/><text class="box" x="677" y="171" text-anchor="middle">mul_()</text>
+  <rect x="749" y="145" width="94" height="42" rx="8" fill="#eee8f7" stroke="#9478b7"/><text class="box" x="796" y="171" text-anchor="middle">add_()</text>
+  <rect x="868" y="145" width="94" height="42" rx="8" fill="#f7ead5" stroke="#c09043"/><text class="box" x="915" y="171" text-anchor="middle">source</text>
+  <text class="small" x="1000" y="171">… complete step</text>
+
+  <g fill="#9fc4db" stroke="#5d94b7">
+    <rect x="166" y="230" width="70" height="44" rx="7"/><rect x="285" y="230" width="70" height="44" rx="7"/><rect x="404" y="230" width="70" height="44" rx="7"/>
+  </g>
+  <g fill="#b9a7d2" stroke="#8062a9">
+    <rect x="523" y="230" width="70" height="44" rx="7"/><rect x="642" y="230" width="70" height="44" rx="7"/><rect x="761" y="230" width="70" height="44" rx="7"/>
+  </g>
+  <rect x="880" y="230" width="70" height="44" rx="7" fill="#e3bd75" stroke="#b17c20"/>
+  <g class="tiny" text-anchor="middle" fill="#243548">
+    <text x="201" y="257">kernel</text><text x="320" y="257">kernel</text><text x="439" y="257">kernel</text><text x="558" y="257">kernel</text><text x="677" y="257">kernel</text><text x="796" y="257">kernel</text><text x="915" y="257">kernel</text>
+  </g>
+  <g stroke="#647689" stroke-width="1.3" marker-end="url(#arrow)">
+    <path d="M201 188 L201 228"/><path d="M320 188 L320 228"/><path d="M439 188 L439 228"/><path d="M558 188 L558 228"/><path d="M677 188 L677 228"/><path d="M796 188 L796 228"/><path d="M915 188 L915 228"/>
+  </g>
+  <rect x="154" y="293" width="870" height="25" rx="12.5" fill="#eef2f6"/>
+  <text class="small" x="589" y="310" text-anchor="middle">Python enters the framework for each op; the accelerator queues a corresponding kernel sequence.</text>
+
+  <!-- Compiled panel -->
+  <rect x="34" y="362" width="1132" height="274" rx="18" fill="#fbf9fe" stroke="#b7a5d1" stroke-width="1.5"/>
+  <text class="panel-title" x="58" y="396">Compiled · one fixed-shape field graph per time step</text>
+
+  <rect x="58" y="420" width="260" height="154" rx="13" fill="#f4ecdc" stroke="#c49a4f"/>
+  <text class="lane" x="188" y="448" text-anchor="middle">first invocation only</text>
+  <rect x="82" y="464" width="212" height="42" rx="8" fill="#fff" stroke="#c49a4f"/>
+  <text class="box" x="188" y="490" text-anchor="middle">capture complete field step</text>
+  <path d="M188 507 L188 525" stroke="#647689" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="82" y="527" width="212" height="31" rx="8" fill="#f6ead1"/>
+  <text class="box" x="188" y="548" text-anchor="middle">compile + warm-up cost</text>
+
+  <path d="M320 497 L354 497" stroke="#647689" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="356" y="420" width="776" height="154" rx="13" fill="#eee8f7" stroke="#8e72b4"/>
+  <text class="lane" x="380" y="448">steady state · repeated N times</text>
+  <rect x="380" y="464" width="160" height="78" rx="10" fill="#fff" stroke="#9b83bb"/>
+  <text class="box" x="460" y="488" text-anchor="middle">Python outer loop</text>
+  <text class="formula" x="460" y="511" text-anchor="middle">field_step(current)</text>
+  <text class="tiny" x="460" y="530" text-anchor="middle">counters remain outside</text>
+  <path d="M542 503 L580 503" stroke="#7453a6" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="582" y="456" width="522" height="94" rx="11" fill="#e5ddf1" stroke="#7453a6" stroke-width="1.5"/>
+  <text class="lane" x="843" y="480" text-anchor="middle">compiled tensor-only field graph</text>
+  <rect x="606" y="494" width="90" height="36" rx="7" fill="#dcecf6"/><text class="box" x="651" y="517" text-anchor="middle">H update</text>
+  <rect x="710" y="494" width="90" height="36" rx="7" fill="#e7e0f2"/><text class="box" x="755" y="517" text-anchor="middle">E update</text>
+  <rect x="814" y="494" width="124" height="36" rx="7" fill="#f6ead1"/><text class="box" x="876" y="517" text-anchor="middle">source inject</text>
+  <rect x="952" y="494" width="128" height="36" rx="7" fill="#dff1ec"/><text class="box" x="1016" y="517" text-anchor="middle">optimized kernels</text>
+  <text class="tiny" x="843" y="544" text-anchor="middle">compiler may fuse and reschedule compatible operations</text>
+
+  <rect x="356" y="588" width="776" height="28" rx="14" fill="#e9e1f3"/>
+  <text class="small" x="744" y="607" text-anchor="middle">Benefit appears only when repeated work amortizes the one-time capture and compilation cost.</text>
+
+  <rect x="184" y="658" width="832" height="25" rx="12.5" fill="#eef3f7"/>
+  <text class="badge" x="600" y="676" text-anchor="middle" fill="#42566a">same fields · same update order · different execution and dispatch boundary</text>
+</svg>
