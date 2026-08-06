@@ -1,0 +1,151 @@
+# FDTD on a Planet, Part 1: Why Model the Earth–Ionosphere Waveguide?
+
+Most introductions to finite-difference time-domain methods begin with a box. The geometry is Cartesian, the material is simple, and the source is placed wherever it is convenient. That is a good way to learn the update equations, but it hides the reason this project exists: some electromagnetic systems are intrinsically global.
+
+The space between the conducting Earth and the lower ionosphere forms a spherical electromagnetic waveguide. Extremely low frequency (ELF) and very low frequency (VLF) energy can travel through this cavity for thousands of kilometres, repeatedly interacting with the ground, oceans, atmosphere, and ionosphere. A local flat-Earth model can answer local questions. It cannot naturally represent propagation around the planet, antipodal focusing, or two paths that travel east and west around different crustal and oceanic regions.
+
+This series develops a three-dimensional FDTD model designed for that global problem. Before looking at the grid or the implementation, this first article explains what is being modelled, why it matters, and how the numerical experiment in this repository is assembled.
+
+```mermaid
+flowchart TB
+    I["Lossy lower ionosphere<br/>conductivity increases with altitude"]
+    W["Earth–ionosphere waveguide<br/>global ELF/VLF propagation"]
+    E["Lossy Earth<br/>ocean, crust, and mantle"]
+    S["Localized vertical current<br/>lightning-like excitation"]
+    R["Receivers<br/>arrival, waveform, spectrum"]
+    I --- W
+    W --- E
+    S --> W --> R
+```
+
+## The physical system
+
+The ionosphere is the weakly ionized part of the upper atmosphere. Solar radiation and energetic particles create free electrons and ions, making its electrical properties strongly dependent on altitude, local time, latitude, season, and space weather. It is not a perfectly conducting shell with a sharp lower boundary. For ELF propagation, however, its increasing conductivity with altitude creates a lossy upper boundary for the Earth–ionosphere cavity.
+
+The lower boundary is complicated in a different way. Seawater is much more conductive than typical continental crust, and the conductivity below the surface varies with geology and depth. Topography and bathymetry change the effective geometry. Consequently, a signal travelling east from a source does not necessarily experience the same channel as one travelling west, even if both receivers are the same great-circle distance away.
+
+The repository starts from a deliberately data-free material model:
+
+- below sea level, a homogeneous lithosphere with conductivity $10^{-3}\,\mathrm{S/m}$ and relative permittivity 10;
+- above sea level, relative permittivity 1 and an exponentially increasing daytime conductivity;
+- optional spherical subsurface anomalies whose conductivity and permittivity can differ from the background.
+
+The atmospheric conductivity is
+
+$$
+\sigma(h)=2.5\times10^5\epsilon_0
+\exp\left(\frac{h-H'}{\zeta}\right),
+$$
+
+where the default baseline uses $H'=74\,\mathrm{km}$ and $\zeta=6\,\mathrm{km}$. These parameters are not universal constants. They define a useful baseline that can be replaced without changing the field solver. The verification configuration also provides the sharper daytime profile used in the Simpson–Taflove study, with a 70 km reference height and a 3.33 km scale height.
+
+That separation is important: Maxwell's equations belong in the solver; uncertain geophysical assumptions belong in a material model.
+
+## Why engineers care
+
+At these frequencies, the wavelength is enormous. A 20 Hz free-space wavelength is about 15,000 km. The Earth itself therefore becomes part of the electromagnetic structure.
+
+This regime is relevant to several classes of engineering and scientific problems:
+
+- global ELF propagation and the natural resonances of the Earth–ionosphere cavity;
+- lightning-generated electromagnetic transients and remote sensing;
+- long-range communication and navigation channels;
+- assessing how ionospheric conditions alter attenuation, phase velocity, and arrival time;
+- studying whether conductivity structures in the crust or upper mantle leave observable signatures;
+- testing numerical dispersion and anisotropy on a closed spherical domain.
+
+The final item is as important as the application. A global grid has no harmless outer edge where errors can be hidden behind an absorbing boundary. A wave can circumnavigate the planet and expose accumulated phase error, directional bias, or a broken topological sign convention.
+
+## The experiment represented by the code
+
+The computational domain is a stack of spherical surfaces. By default it extends from 100 km below sea level to 100 km above it. The lower part captures a lossy Earth; the upper part reaches into the increasingly conductive ionosphere. Tangential electric fields are set to zero at the two radial ends. In normal configurations both terminations lie inside strongly conducting regions, rather than being intended as physical interfaces at exactly $\pm100$ km.
+
+```mermaid
+flowchart LR
+    B0["PEC radial termination<br/>−100 km"]
+    G["Lossy lithosphere<br/>h < 0"]
+    A["Atmospheric waveguide<br/>h ≥ 0"]
+    I["Conductive ionosphere<br/>σ(h) rises exponentially"]
+    B1["PEC radial termination<br/>+100 km"]
+    B0 --- G --- A --- I --- B1
+    S["Radial Gaussian current<br/>default altitude: 2.5 km"] --> A
+```
+
+The horizontal grid covers the entire globe. It is derived from an icosahedron, recursively subdivided, and projected onto the sphere. Its triangular primal mesh and polygonal dual mesh avoid the polar singularity and extreme cell convergence of a latitude–longitude grid. The construction produces exactly 12 pentagonal dual cells and hexagons everywhere else. Part 2 will explain why this primal–dual pairing is especially useful for integral Maxwell updates.
+
+The default source is a localized vertical Gaussian current above Gwangju, Republic of Korea, at $35.1595^\circ$ N, $126.8526^\circ$ E and 2.5 km altitude. Its peak current, width, centre time, location, and optional carrier frequency are configurable. A modulated 20 Hz experiment uses a frequency-scaled Gaussian envelope unless the width is supplied explicitly.
+
+On a coarse mesh, snapping that source to the nearest grid point would move it by hundreds or thousands of kilometres. The implementation instead finds the containing spherical triangle and distributes current to its three vertices with barycentric weights. In the radial direction, it uses linear cloud-in-cell weights on adjacent staggered planes. The weights preserve the requested total current, horizontal direction, and altitude.
+
+## Resolution is part of the experiment
+
+Each icosahedral subdivision quarters every triangular face. The number of dual cells is
+
+$$
+N_v=10\cdot4^L+2,
+$$
+
+where $L$ is the subdivision level. Some representative sizes are:
+
+| Level | Surface cells | Approximate centre spacing |
+| ---: | ---: | ---: |
+| 1 | 42 | 3,765 km |
+| 2 | 162 | 1,910 km |
+| 3 | 642 | 962 km |
+| 6 | 40,962 | about 120 km |
+| 7 | 163,842 | about 60 km |
+| 8 | 655,362 | about 30 km |
+
+The small defaults are intended for inspection and development, not for resolving a small geological target. The command-line interface warns when a requested anomaly is smaller than the horizontal spacing or radial resolution. This is a numerical observability issue: adding a detailed physical parameter does not make the grid detailed enough to represent it.
+
+The same principle applies in the radial direction. A uniform grid is convenient for global propagation studies. A shallow target may require the optional 1.25 km near-surface refinement, embedded within coarser cells elsewhere. The solver also accepts any strictly increasing custom sequence of radial nodes.
+
+## What we measure
+
+The state consists of four field components arranged on staggered radial planes:
+
+- radial electric field $E_r$;
+- tangential electric field $E_t$;
+- radial magnetic field $H_r$;
+- tangential magnetic field $H_t$.
+
+Experiments can inspect a global surface map, a great-circle distance–height section, or a receiver trace. For validation, receiver traces are particularly valuable. Their arrival times expose phase-velocity error, their shape exposes the interaction between the pulse and the waveguide, and spectral ratios between receivers estimate attenuation without requiring the absolute source amplitude to be known.
+
+The project can also render the global field directly on the geodesic mesh. The animation below is a repository-generated example rather than a conceptual illustration.
+
+![Geodesic FDTD field propagating over the Earth](../../artifacts/taflove/fig-3-11-gwangju.gif)
+
+The strongest repository-level verification follows the global ELF experiment of [Simpson and Taflove (2004)](https://doi.org/10.1109/TAP.2004.823953). The current production comparison uses a complete 35,000-step trace and an ETOPO5-based reconstruction of the paper's unspecified NOAA-NGDC relief input. ETOPO5 is period-appropriate, but the paper does not identify the exact data edition or preprocessing convention, so it cannot be claimed as the authors' original data set.
+
+The rerun reproduces the qualitative temporal morphology: a negative main pulse, positive overshoot, persistent slow tail, correct quarter-arc-before-half-arc arrival ordering, and visible east–west nonidentity. It does not reproduce the published east/west peak ordering and separation. It also fails the strict pointwise attenuation tolerances over 50–500 Hz. The A–B path has a mean absolute error of $1.104\,\mathrm{dB/Mm}$ and a maximum error of $2.538\,\mathrm{dB/Mm}$; A′–B′ has a mean absolute error of $0.242\,\mathrm{dB/Mm}$ and a maximum error of $3.258\,\mathrm{dB/Mm}$. This mixed result distinguishes “the waveform looks plausible” from exact plot reproduction and quantitative agreement.
+
+![Published and reproduced temporal receiver responses](../verification/images/simpson-taflove-2004-fig-7-comparison.png)
+
+![Published and reproduced spectral attenuation](../verification/images/simpson-taflove-2004-fig-8-comparison.png)
+
+## A small run and a paper-scale run
+
+A laptop-sized smoke experiment is:
+
+```bash
+uv run ionosphere --subdivision 2 --radial-cells 24 --steps 200
+```
+
+It uses 162 surface cells and is useful for checking setup, field layout, and visualization. It is not a quantitatively resolved Earth model.
+
+The verification study is much larger. Its convergence and directional-dispersion runs cover subdivisions 6–8 and commonly use 25,023 updates. The authoritative complete-time production comparison uses subdivision 8, 40 radial cells spanning $-100$ to $+100$ km, a $3\,\mu\mathrm{s}$ step, and 35,000 updates. The subdivision-7 grid has 163,842 cells per radial plane, matching the scale reported in the reference study; the production grid has 655,362 surface cells and uses compiled CUDA in double precision.
+
+This enormous gap between a smoke test and a production experiment is typical of wave simulation. Correctness is developed at small scale, but dispersion and attenuation claims must be made at the scale where the relevant wavelengths and material structures are resolved.
+
+## The modelling contract
+
+The current project should be read as a numerical laboratory with explicit assumptions:
+
+1. The geometry is globally spherical and closed.
+2. Material loss is represented through conductivity and permittivity sampled at electric-field locations.
+3. The baseline ionosphere is isotropic and scalar; magnetized plasma dispersion is not yet part of this solver.
+4. The source is an impressed radial current with controlled space–time weighting.
+5. Stability is protected by a conservative, geometry-aware Courant estimate.
+6. Validation includes convergence and receiver-based comparisons, not only images.
+
+That contract gives us a concrete target for the rest of the series. In Part 2, we will turn the planet into a computable mesh and derive the actual geodesic FDTD update. Parts 3 and 4 will then show how the same numerical algorithm is expressed efficiently in NumPy and PyTorch.
