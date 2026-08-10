@@ -359,11 +359,20 @@ def plot_mesh_3d(
                 line_width=1.0,
                 name="geodesic-grid",
             )
-            pentagons = dataset.extract_cells(values == 5.0)
+            pentagons = (
+                dataset.extract_cells(values == 5.0)
+                .extract_surface(algorithm="dataset_surface")
+                .triangulate()
+                .subdivide(2)
+            )
+            radii = np.linalg.norm(pentagons.points, axis=1, keepdims=True)
+            surface_radius = float(np.linalg.norm(dataset.points[0]))
+            pentagons.points *= (1.0005 * surface_radius) / radii
             plotter.add_mesh(
                 pentagons,
                 color="purple",
                 opacity=0.55,
+                lighting=False,
                 name="pentagonal-cells",
             )
         else:
