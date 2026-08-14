@@ -1,6 +1,6 @@
-# FDTD on a Planet, Part 3: A Vectorized NumPy Implementation
+# FDTD on a Planet, Part 4: A Vectorized NumPy Implementation
 
-The mathematical update from Part 2 contains only a few operations: differences, oriented circulations, multiplication by metric terms, and in-place field updates. The implementation challenge is that the arrays are large and the horizontal grid is irregular. A Python loop over every edge, face, cell, radial layer, and time step would bury the algorithm under interpreter overhead.
+The mathematical update from [Part 3](03-spherical-fdtd-time-stepping.md) contains only a few operations: differences, oriented circulations, multiplication by metric terms, and in-place field updates. The implementation challenge is that the arrays are large and the horizontal grid is irregular. A Python loop over every edge, face, cell, radial layer, and time step would bury the algorithm under interpreter overhead.
 
 The NumPy backend solves this by representing the mesh topology as integer arrays and expressing one complete FDTD step as bulk array operations. This follows NumPy's broader array-programming model, in which compiled multidimensional array operations replace element-by-element Python work.[^harris-2020] It is the default backend, the double-precision reference, and the clearest executable description of the numerical method in this repository.[^numpy-backend-source]
 
@@ -45,7 +45,7 @@ Et: (Ne, Nr)
 Hr: (Nf, Nr)
 ```
 
-The first axis is always a surface entity and the second is radial position. The diagram below connects those array dimensions to the radial staggering from Part 2. $E_r$ and $H_t$ occupy the $N_r+1$ TM-r planes, while $E_t$ and $H_r$ occupy the $N_r$ intervening TE-r layers.
+The first axis is always a surface entity and the second is radial position. The diagram below connects those array dimensions to the radial staggering from Part 3. $E_r$ and $H_t$ occupy the $N_r+1$ TM-r planes, while $E_t$ and $H_r$ occupy the $N_r$ intervening TE-r layers.
 
 ![NumPy field array layout showing the surface-entity first axis and the staggered radial-position second axis for Er, Ht, Et, and Hr](images/numpy-field-array-layout.svg)
 
@@ -71,7 +71,7 @@ The memory map below makes the execution difference concrete. A scalar implement
 
 *Both paths compute the same head-minus-tail values. Vectorization removes repeated Python dispatch; it does not imply zero-copy access or automatic parallel execution.*
 
-This is the first optimization layer, not the last one. NumPy vectorization changes *how the work is expressed*: many scalar loop iterations become a small number of bulk array operations executed by compiled CPU kernels. [Part 4](04-accelerating-fdtd-with-pytorch.md#vectorization-is-the-baseline-not-the-pytorch-optimization) preserves that tensor-level formulation and changes *how it is executed*: PyTorch can keep the arrays on a selected device, compile the fixed-shape field step, and control when accelerator results synchronize with the host.
+This is the first optimization layer, not the last one. NumPy vectorization changes *how the work is expressed*: many scalar loop iterations become a small number of bulk array operations executed by compiled CPU kernels. [Part 5](05-accelerating-fdtd-with-pytorch.md#vectorization-is-the-baseline-not-the-pytorch-optimization) preserves that tensor-level formulation and changes *how it is executed*: PyTorch can keep the arrays on a selected device, compile the fixed-shape field step, and control when accelerator results synchronize with the host.
 
 ## Vectorizing triangular circulation
 
@@ -147,7 +147,7 @@ flowchart LR
 
 ## One NumPy time step
 
-One complete step first advances the two magnetic fields, then uses those updated magnetic fields to advance the two electric fields. The diagram follows array shapes rather than physical stencil positions; the physical locations are shown in Part 2.
+One complete step first advances the two magnetic fields, then uses those updated magnetic fields to advance the two electric fields. The diagram follows array shapes rather than physical stencil positions; the physical locations are shown in Part 3.
 
 ![Shape-aware data-flow diagram for one NumPy FDTD time step, showing the two magnetic updates followed by the two electric updates](images/numpy-one-step-dataflow.svg)
 
@@ -161,7 +161,7 @@ surface_gradient_er = (
 ) / primal_lengths_tm
 ```
 
-The radial derivative of `Et` is constructed in an array matching `Ht`. Interior nodes use adjacent midpoint differences; endpoints use the zero-tangential-electric boundary. After subtracting that derivative, the array is scaled by `dt / mu0` and added in place to `Ht`.
+The radial derivative of `Et` is constructed in an array matching `Ht`. In the default full-spherical mode, `Et` is first multiplied by its midpoint radius, differenced, and divided by the target `Ht` radius. Interior nodes use adjacent midpoint differences; odd PEC ghost values produce the endpoint terms. After subtracting that derivative, the array is scaled by `dt / mu0` and added in place to `Ht`.
 
 For `Hr`, edge values are first multiplied by primal edge lengths. `face_circulation` sums the oriented line integral, which is divided by face area and subtracted after scaling by `dt / mu0`.
 
@@ -244,7 +244,7 @@ The last check is particularly valuable. Two independently implemented topology 
 
 NumPy is an excellent choice for mesh development, equation review, testing, small and medium CPU runs, and post-processing. It has no compilation warm-up, its default precision is conservative, and every array is immediately available to the scientific Python ecosystem.
 
-Its limitation is not expressiveness but scale. At hundreds of thousands of surface cells and tens of thousands of time steps, GPU throughput and compiled tensor graphs become compelling. Part 4 keeps the same solver and replaces only the backend kernels with PyTorch operations suitable for CPU, Apple Metal, and CUDA.
+Its limitation is not expressiveness but scale. At hundreds of thousands of surface cells and tens of thousands of time steps, GPU throughput and compiled tensor graphs can become compelling. [Part 5](05-accelerating-fdtd-with-pytorch.md) keeps the same solver and replaces only the backend kernels with PyTorch operations suitable for CPU, Apple Metal, and CUDA. The standardized benchmark also shows why small grids can still favor NumPy.
 
 ## References
 

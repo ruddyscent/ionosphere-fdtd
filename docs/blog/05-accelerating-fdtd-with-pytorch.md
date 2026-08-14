@@ -1,4 +1,4 @@
-# FDTD on a Planet, Part 4: Accelerating the Solver with PyTorch
+# FDTD on a Planet, Part 5: Accelerating the Solver with PyTorch
 
 The PyTorch version of this project is not a separate FDTD algorithm. It uses the same mesh, field layout, material coefficients, source placement, Courant check, and four update equations as the NumPy version. Only the small set of array and topology operations changes.[^torch-backend-source]
 
@@ -15,7 +15,7 @@ flowchart LR
 
 ## Vectorization is the baseline, not the PyTorch optimization
 
-[Part 3](03-vectorized-fdtd-with-numpy.md) removed scalar Python loops by expressing topology gathers, differences, reductions, and field updates as bulk NumPy operations. The PyTorch backend does not replace that idea. It starts from the same tensor-level algorithm and adds a second optimization layer: execution placement and scheduling.
+[Part 4](04-vectorized-fdtd-with-numpy.md) removed scalar Python loops by expressing topology gathers, differences, reductions, and field updates as bulk NumPy operations. The PyTorch backend does not replace that idea. It starts from the same tensor-level algorithm and adds a second optimization layer: execution placement and scheduling.
 
 | Question | NumPy vectorization | PyTorch optimization |
 |---|---|---|
@@ -124,9 +124,43 @@ The following timeline makes the execution boundary explicit. Eager mode enters 
 
 *Compilation can fuse or reschedule compatible work, but it does not promise that every operation becomes one kernel. The durable change is the optimization boundary: the compiler sees the complete tensor-only field update.*
 
-## Measured throughput on one CPU–GPU workstation
+## Two measurements with different purposes
 
-A matched local benchmark makes the layers above concrete. All four runs used the same polar subdivision-4 mesh (2,562 dual cells, 7,680 edges, and 5,120 triangular faces), 24 radial cells, Courant factor 0.2, 1 MA Gaussian source, and `float64` fields. After 20 untimed warm-up steps, each result below is the median of five synchronized 200-step batches. Mesh construction, tensor initialization, and the first `torch.compile` capture are excluded, so this is steady-state stepping throughput rather than end-to-end job time.[^backend-throughput-data]
+The repository now separates a standardized backend matrix from the older
+production-oriented throughput experiment below. They answer different
+questions and must not be combined into one speedup claim.[^backend-benchmark]
+
+The standardized 2026-08-14 eager `float32` run uses subdivision 2, 16 radial
+cells, 20 warm-up steps, and three synchronized 200-step repeats. On its Linux
+host, NumPy CPU reached 3022.4 steps/s, PyTorch CPU 1822.5 steps/s, and PyTorch
+CUDA 1193.8 steps/s. MPS was unavailable. The deliberately small workload is a
+dispatch-overhead test: NumPy wins, and the GPU is slowest.
+
+| Backend | Device | Steps/s | Relative to NumPy |
+|---|---|---:|---:|
+| NumPy | CPU | 3022.4 | 1.00× |
+| PyTorch | CPU | 1822.5 | 0.60× |
+| PyTorch | CUDA | 1193.8 | 0.39× |
+| PyTorch | MPS | unavailable | — |
+
+The matrix records unavailable devices explicitly, excludes setup and transfer
+from the timed region, and synchronizes accelerators before stopping the clock.
+It uses `float32` so NumPy, PyTorch CPU, CUDA, and MPS can be compared on hosts
+where all four exist. Compiled and `float64` runs are separate experiments.
+
+Run the same eager matrix with:
+
+```bash
+python -m benchmarks.backend_matrix \
+  --subdivision 2 --radial-cells 16 \
+  --steps 200 --warmup-steps 20 --repeats 3 \
+  --dtype float32 \
+  --output artifacts/benchmarks/backend-matrix-float32.json
+```
+
+### A production-oriented historical measurement
+
+A separate 2026-08-07 measurement used a larger polar subdivision-4 mesh (2,562 dual cells, 7,680 edges, and 5,120 triangular faces), 24 radial cells, Courant factor 0.2, a 1 MA Gaussian source, and `float64` fields. After 20 untimed warm-up steps, each result below is the median of five synchronized 200-step batches. Mesh construction, tensor initialization, and the first `torch.compile` capture are excluded, so this is steady-state stepping throughput rather than end-to-end job time.[^backend-throughput-data]
 
 | Implementation | Execution mode | Median steps/s | Speedup vs. NumPy |
 |---|---|---:|---:|
@@ -139,7 +173,7 @@ A matched local benchmark makes the layers above concrete. All four runs used th
 
 *The horizontal axis is logarithmic so the CPU measurements remain readable beside compiled CUDA. Every multiplier uses the NumPy result as its baseline.*
 
-This result separates three effects. Moving from NumPy to eager PyTorch on the same CPU changes the backend kernels and uses four PyTorch intra-op threads. Moving to eager CUDA adds accelerator execution and device residency. Compilation then optimizes the repeated fixed-shape graph. The 52.43× figure is therefore the combined result of backend, hardware, and compilation on this workload—not a universal “PyTorch is 52× faster” claim.
+This historical result separates three effects. Moving from NumPy to eager PyTorch on the same CPU changes the backend kernels and uses four PyTorch intra-op threads. Moving to eager CUDA adds accelerator execution and device residency. Compilation then optimizes the repeated fixed-shape graph. The 52.43× figure is therefore the combined result of backend, hardware, compilation, and this larger workload—not a universal “PyTorch is 52× faster” claim. The standardized small-grid matrix above demonstrates the opposite ordering.
 
 Compilation warm-up is absent from the chart and can dominate short jobs. Small grids can also favor NumPy because framework and launch overhead outweigh useful accelerator work. Backend choice should therefore be based on a benchmark with the intended mesh, radial resolution, dtype, observation cadence, and step count.
 
@@ -255,14 +289,15 @@ For a very small grid, start without `compile_step=True`, measure eager executio
 
 GPU acceleration did not require rewriting the geophysical model or maintaining two versions of Maxwell's equations. It required identifying a compact algebra of topology operations, making all persistent state backend-native, keeping transfers explicit, and validating the accelerated path against a simple reference.
 
-That closes the first four-part series:
+That closes the implementation arc of the series:
 
 1. the Earth–ionosphere waveguide defines the physical and engineering problem;
 2. the geodesic primal–dual grid turns the sphere into oriented integral operators;
-3. NumPy provides a vectorized, inspectable reference implementation;
-4. PyTorch carries the same algorithm to CPU, MPS, and CUDA at production scale.
+3. spatial and temporal staggering turn those operators into a field step;
+4. NumPy provides a vectorized, inspectable reference implementation;
+5. PyTorch carries the same algorithm to CPU, MPS, and CUDA at production scale.
 
-The next natural work is not another backend. It is improving the model and its evidence: finer convergence studies, more realistic ionospheric physics, better crustal data, and continued separation between numerical error and uncertainty in the physical inputs.
+The next step is evidence. [Part 6](06-verifying-the-solver-with-analytic-solutions.md) checks A0–A4 analytic Maxwell solutions, while [Parts 7](07-reproducing-simpson-taflove-2004.md) and [8](08-reproducing-simpson-heikes-taflove-2006.md) separate successful physical behavior from the quantitative failures in two paper reproductions.
 
 ## References
 
@@ -282,6 +317,8 @@ The next natural work is not another backend. It is improving the model and its 
 
 [^backend-tests]: Ionosphere FDTD project, “[Backend equivalence, device-policy, and compilation tests](../../tests/test_backends.py).”
 
-[^verification-2004]: Ionosphere FDTD project, “[Final Simpson–Taflove 2004 Verification Report](../verification/simpson-taflove-2004.md),” production rerun dated 2026-08-06.
+[^verification-2004]: Ionosphere FDTD project, “[Simpson–Taflove 2004 Reproduction Verification](../verification/simpson-taflove-2004.md),” accessed 2026-08-14.
 
 [^backend-throughput-data]: Ionosphere FDTD project, “[Raw NumPy and PyTorch throughput measurements](data/pytorch-backend-throughput-2026-08-07.csv),” measured 2026-08-07 on an Intel Core i7-6700, NVIDIA GeForce RTX 3060, Python 3.12.3, NumPy 2.5.1, and PyTorch 2.13.0+cu130.
+
+[^backend-benchmark]: Ionosphere FDTD project, “[Backend Performance Comparison](../benchmarks/backend-comparison.md),” reference run dated 2026-08-14.

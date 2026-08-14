@@ -60,34 +60,7 @@ The horizontal grid covers the entire globe. It is derived from an icosahedron, 
 
 The default source is a localized vertical Gaussian current above Gwangju, Republic of Korea, at $35.1595^\circ$ N, $126.8526^\circ$ E and 2.5 km altitude. Its peak current, width, centre time, location, and optional carrier frequency are configurable. A modulated 20 Hz experiment uses a frequency-scaled Gaussian envelope unless the width is supplied explicitly.
 
-On a coarse mesh, snapping that source to the nearest grid point would move it by hundreds or thousands of kilometres. The implementation instead finds the containing spherical triangle and distributes current to its three vertices with barycentric weights. In the radial direction, it uses linear cloud-in-cell weights on adjacent staggered planes. The weights preserve the requested total current, horizontal direction, and altitude.
-
-## Resolution is part of the experiment
-
-Each icosahedral subdivision quarters every triangular face. The number of dual cells is
-
-$$
-N_v=10\cdot4^L+2,
-$$
-
-where $L$ is the subdivision level. Some representative sizes are:
-
-| Level | Surface cells | Approximate centre spacing |
-| ---: | ---: | ---: |
-| 1 | 42 | 3,765 km |
-| 2 | 162 | 1,910 km |
-| 3 | 642 | 962 km |
-| 6 | 40,962 | about 120 km |
-| 7 | 163,842 | about 60 km |
-| 8 | 655,362 | about 30 km |
-
-![The same illustrative conductivity target sampled on subdivision levels 2, 6, and 8, showing how a feature becomes numerically observable only when several cells resolve it](images/grid-resolution-observability.svg)
-
-*A global wave and a localized material feature impose different resolution requirements. The 20 Hz free-space wavelength is about 15,000 km, but an 80 km structure remains unresolved on a grid whose cell centres are roughly 120 km apart.*
-
-The small defaults are intended for inspection and development, not for resolving a small geological target. The command-line interface warns when a requested anomaly is smaller than the horizontal spacing or radial resolution. This is a numerical observability issue: adding a detailed physical parameter does not make the grid detailed enough to represent it.
-
-The same principle applies in the radial direction. A uniform grid is convenient for global propagation studies. A shallow target may require the optional 1.25 km near-surface refinement, embedded within coarser cells elsewhere. The solver also accepts any strictly increasing custom sequence of radial nodes.
+On a coarse mesh, snapping that source to the nearest grid point would move it by hundreds or thousands of kilometres. The implementation instead finds the containing spherical triangle and distributes current to its three vertices with barycentric weights. In the radial direction, it uses linear cloud-in-cell weights on adjacent staggered planes. The weights preserve the requested current moment, geographic location, and altitude under refinement.
 
 ## What we measure
 
@@ -122,27 +95,13 @@ The project can also render the global field directly on the geodesic mesh. The 
 
 *[Watch on YouTube: ELF Waves Around Earth | 3-D Geodesic FDTD Simulation with PyTorch](https://www.youtube.com/watch?v=MDfjkfOPYKc).*
 
-The strongest repository-level verification follows the global ELF experiment of Simpson and Taflove (2004).[^simpson-taflove-2004] The current production comparison uses a complete 35,000-step trace and an ETOPO5-based reconstruction of the paper's unspecified NOAA-NGDC relief input. ETOPO5 is period-appropriate, but the paper does not identify the exact data edition or preprocessing convention, so it cannot be claimed as the authors' original data set.[^verification-2004]
+The most demanding paper-level validation follows the global ELF experiment of Simpson and Taflove (2004).[^simpson-taflove-2004] The current production comparison uses a complete 35,000-step trace and an ETOPO5-based reconstruction of the paper's unspecified NOAA-NGDC relief input. ETOPO5 is period-appropriate, but the paper does not identify the exact data edition or preprocessing convention, so it cannot be claimed as the authors' original data set.[^verification-2004]
 
 The rerun reproduces the qualitative temporal morphology: a negative main pulse, positive overshoot, persistent slow tail, correct quarter-arc-before-half-arc arrival ordering, and visible east–west nonidentity. It does not reproduce the published east/west peak ordering and separation. It also fails the strict pointwise attenuation tolerances over 50–500 Hz. The A–B path has a mean absolute error of $1.104\,\mathrm{dB/Mm}$ and a maximum error of $2.538\,\mathrm{dB/Mm}$; A′–B′ has a mean absolute error of $0.242\,\mathrm{dB/Mm}$ and a maximum error of $3.258\,\mathrm{dB/Mm}$. This mixed result distinguishes “the waveform looks plausible” from exact plot reproduction and quantitative agreement.[^verification-2004]
 
 ![Published and reproduced temporal receiver responses](images/simpson-taflove-2004-fig-7-comparison.png)
 
 ![Published and reproduced spectral attenuation](images/simpson-taflove-2004-fig-8-comparison.png)
-
-## A small run and a paper-scale run
-
-A laptop-sized smoke experiment is:
-
-```bash
-uv run ionosphere --subdivision 2 --radial-cells 24 --steps 200
-```
-
-It uses 162 surface cells and is useful for checking setup, field layout, and visualization. It is not a quantitatively resolved Earth model.
-
-The verification study is much larger. Its convergence and directional-dispersion runs cover subdivisions 6–8 and commonly use 25,023 updates. The authoritative complete-time production comparison uses subdivision 8, 40 radial cells spanning $-100$ to $+100$ km, a $3\,\mu\mathrm{s}$ step, and 35,000 updates. The subdivision-7 grid has 163,842 cells per radial plane, matching the scale reported in the reference study; the production grid has 655,362 surface cells and uses compiled CUDA in double precision.[^simpson-taflove-2004][^verification-2004]
-
-This enormous gap between a smoke test and a production experiment is typical of wave simulation. Correctness is developed at small scale, but dispersion and attenuation claims must be made at the scale where the relevant wavelengths and material structures are resolved.
 
 ## The modelling contract
 
@@ -155,7 +114,7 @@ The current project should be read as a numerical laboratory with explicit assum
 5. Stability is protected by a conservative, geometry-aware Courant estimate.
 6. Validation includes convergence and receiver-based comparisons, not only images.
 
-That contract gives us a concrete target for the rest of the series. In Part 2, we will turn the planet into a computable mesh and derive the actual geodesic FDTD update. Parts 3 and 4 will then show how the same numerical algorithm is expressed efficiently in NumPy and PyTorch.
+That contract gives us a concrete target for the rest of the series. [Part 2](02-geodesic-grid-and-fdtd-algorithm.md) turns the planet into an oriented geodesic mesh. [Part 3](03-spherical-fdtd-time-stepping.md) places the four fields on that mesh and advances Maxwell's equations. Parts 4 and 5 then express the same algorithm in NumPy and PyTorch before Parts 6–8 build the verification evidence.
 
 ## References
 
@@ -169,4 +128,4 @@ That contract gives us a concrete target for the rest of the series. In Part 2, 
 
 [^simpson-heikes-taflove-2006]: J. J. Simpson, R. P. Heikes, and A. Taflove, “FDTD Modeling of a Novel ELF Radar for Major Oil Deposits Using a Three-Dimensional Geodesic Grid of the Earth-Ionosphere Waveguide,” *IEEE Transactions on Antennas and Propagation*, 54(6), 1734–1741, 2006, [doi:10.1109/TAP.2006.875504](https://doi.org/10.1109/TAP.2006.875504).
 
-[^verification-2004]: Ionosphere FDTD project, “[Final Simpson–Taflove 2004 Verification Report](../verification/simpson-taflove-2004.md),” production rerun dated 2026-08-06.
+[^verification-2004]: Ionosphere FDTD project, “[Simpson–Taflove 2004 Reproduction Verification](../verification/simpson-taflove-2004.md),” accessed 2026-08-14.

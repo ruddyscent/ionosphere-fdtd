@@ -1,6 +1,6 @@
-# FDTD on a Planet, Part 6: Reproducing Simpson–Taflove 2004
+# FDTD on a Planet, Part 7: Reproducing Simpson–Taflove 2004
 
-[Part 5](05-verifying-the-solver-with-analytic-solutions.md) established that
+[Part 6](06-verifying-the-solver-with-analytic-solutions.md) established that
 the solver converges to known Maxwell solutions. The next test is less tidy:
 can it reproduce a published global Earth–ionosphere simulation?
 
@@ -153,12 +153,12 @@ Each production archive records its complete configuration and checksums with
 the receiver traces. Published panels are retained only for technical
 comparison.[^verification-2004]
 
-Part 7 follows the same discipline for the 2006 extension: two global
-propagation figures and a proposed ELF radar response to a subsurface oil body.
+[Part 8](08-reproducing-simpson-heikes-taflove-2006.md) follows the same
+discipline for the 2006 extension: two global propagation figures and a
+proposed ELF radar response to a subsurface oil body.
 
 ## References
 
 [^paper-2004]: J. J. Simpson and A. Taflove, “Three-Dimensional FDTD Modeling of Impulsive ELF Propagation About the Earth-Sphere,” *IEEE Transactions on Antennas and Propagation*, 52(2), 443–451, 2004, [doi:10.1109/TAP.2004.823953](https://doi.org/10.1109/TAP.2004.823953).
 
 [^verification-2004]: Ionosphere FDTD project, “[Simpson–Taflove 2004 Reproduction Verification](../verification/simpson-taflove-2004.md),” accessed 2026-08-14.
-

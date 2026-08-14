@@ -1,6 +1,6 @@
-# FDTD on a Planet, Part 5: Verifying the Solver with Analytic Solutions
+# FDTD on a Planet, Part 6: Verifying the Solver with Analytic Solutions
 
-The first four parts of this series built a geodesic FDTD solver and moved the
+The first five parts of this series built a geodesic FDTD solver and moved the
 same algorithm from NumPy to PyTorch. None of that, by itself, proves that the
 program solves Maxwell's equations correctly. A stable animation can hide a
 sign error, a wrong metric factor, excessive modal coupling, or a boundary
@@ -252,5 +252,4 @@ under `benchmarks/` and never decide PASS or FAIL.
 
 ## References
 
-[^analytic-report]: Ionosphere FDTD project, “[Analytic Maxwell Solver Verification (A0–A4)](https://github.com/ruddyscent/ionosphere-fdtd/blob/master/docs/verification/analytic-solution-benchmarks.md),” accessed 2026-08-14.
-
+[^analytic-report]: Ionosphere FDTD project, “[Analytic Maxwell Solver Verification (A0–A4)](../verification/analytic-solution-benchmarks.md),” accessed 2026-08-14.

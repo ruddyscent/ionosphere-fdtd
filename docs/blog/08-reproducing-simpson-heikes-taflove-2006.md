@@ -1,8 +1,8 @@
-# FDTD on a Planet, Part 7: Reproducing Simpson–Heikes–Taflove 2006
+# FDTD on a Planet, Part 8: Reproducing Simpson–Heikes–Taflove 2006
 
 The 2006 paper by Simpson, Heikes, and Taflove extends global geodesic FDTD
 from propagation to remote sensing. Its first two comparison figures revisit
-the global ELF experiment discussed in [Part 6](06-reproducing-simpson-taflove-2004.md).
+the global ELF experiment discussed in [Part 7](07-reproducing-simpson-taflove-2004.md).
 Its third asks a more ambitious question: can a 20 Hz transmitter in Wisconsin
 detect the electromagnetic effect of a major subsurface oil deposit in
 Alaska?[^paper-2006]
@@ -45,11 +45,9 @@ support conservatively to both radial-electric dual cells and
 tangential-electric edge diamonds. Radial material fractions represent the
 overlap between the anomaly and each staggered electric control volume.
 
-![Geodesic transmitter, receiver, and anomaly geometry used for the Simpson–Heikes–Taflove 2006 reproduction](../verification/images/simpson-taflove-2006-receiver-grid.png)
-
-*The transmitter–receiver separation is global, while the target is local and
+The transmitter–receiver separation is global, while the target is local and
 subsurface. Resolving both in one grid is a much harder requirement than
-resolving the 20 Hz wavelength alone.*
+resolving the 20 Hz wavelength alone.
 
 Even with conservative support, the reconstruction is not identical to the
 authors' model. The paper does not publish the exact Mesquite optimization
@@ -182,4 +180,3 @@ Published panels are included only for technical comparison.[^verification-2006]
 [^paper-2006]: J. J. Simpson, R. P. Heikes, and A. Taflove, “FDTD Modeling of a Novel ELF Radar for Major Oil Deposits Using a Three-Dimensional Geodesic Grid of the Earth-Ionosphere Waveguide,” *IEEE Transactions on Antennas and Propagation*, 54(6), 1734–1741, 2006, [doi:10.1109/TAP.2006.875504](https://doi.org/10.1109/TAP.2006.875504).
 
 [^verification-2006]: Ionosphere FDTD project, “[Simpson–Heikes–Taflove 2006 Reproduction Verification](../verification/simpson-taflove-2006.md),” accessed 2026-08-14.
-

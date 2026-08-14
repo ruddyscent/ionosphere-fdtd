@@ -1,12 +1,22 @@
-# FDTD on a Planet, Part 2: The Geodesic Grid and the Field Algorithm
+# FDTD on a Planet, Part 2: Building a Spherical Geodesic Grid
 
-A spherical FDTD solver needs more than points distributed over a globe. It needs an oriented topology: edges must have directions, every face must know which way its boundary is traversed, and neighbouring cells must agree on the sign of their shared flux. The metric—lengths and areas—then turns those topological differences and circulations into physical derivatives.
+[Part 1](01-why-model-the-earth-ionosphere-waveguide.md) treated the space
+between the Earth and lower ionosphere as one global spherical waveguide. The
+next problem is spatial: how do we turn that continuous sphere into finite
+cells without introducing a polar singularity or losing the orientation needed
+by Maxwell's curl?
 
-This project builds that structure from an icosahedron and uses it to apply Maxwell's integral laws directly. The result is a staggered three-dimensional method that resembles a Yee scheme, but whose horizontal operators live on a triangular primal mesh and its pentagon–hexagon dual.[^yee-1966][^simpson-heikes-taflove-2006]
+A useful grid needs more than well-distributed points. Every edge must have a
+direction, every face must know how its boundary is traversed, and neighboring
+cells must use opposite signs on a shared edge. Lengths and areas then convert
+those topological differences and circulations into physical derivatives.
 
 ## From an icosahedron to a global grid
 
-An icosahedron begins with 12 vertices, 30 edges, and 20 triangular faces. One subdivision step replaces each triangle by four triangles: the three edge midpoints are created, normalized back onto the unit sphere, and connected. Repeating this process produces an increasingly fine geodesic triangulation.[^randall-2002]
+An icosahedron begins with 12 vertices, 30 edges, and 20 triangular faces. One
+subdivision replaces each triangle by four: create its three edge midpoints,
+normalize them back onto the unit sphere, and reconnect them. Repetition
+produces an increasingly fine triangular geodesic mesh.[^randall-2002]
 
 At subdivision level $L$,
 
@@ -16,30 +26,72 @@ N_e=30\cdot4^L,\qquad
 N_f=20\cdot4^L.
 $$
 
-The repository optionally relaxes vertices toward neighbouring face centres and reprojects them onto the sphere, although the default uses no relaxation.[^mesh-source]
-
-The triangles form the **primal mesh**. A corresponding **dual mesh** is constructed by connecting adjacent triangle centres across each primal edge. A dual cell surrounds every primal vertex. The 12 vertices inherited from the icosahedron have degree five, giving 12 pentagons; all other vertices have degree six, giving hexagons.[^randall-2002][^simpson-heikes-taflove-2006]
-
-The pentagons are not defects accidentally introduced by an implementation. They are topologically necessary. A sphere cannot be tiled entirely by a regular hexagonal network. The 12 degree-five cells supply the curvature needed to close the surface.
-
-![Subdivision-2 geodesic dual grid wrapped around the Earth. Purple cells highlight the topologically required pentagons among the hexagons.](images/geodesic-grid.png)
-
-*The repository's subdivision-2 dual grid. Black lines trace the 162 surface cells; purple highlights identify the visible members of the 12 pentagons, with hexagons everywhere else.*
+The repository can relax or optimize vertex positions while preserving the
+topology, although the default mesh uses the directly projected coordinates.
+[^mesh-source]
 
 ![Four-stage construction of the geodesic grid from an icosahedron through triangle subdivision and spherical projection to the pentagon–hexagon dual mesh](images/geodesic-grid-construction.svg)
 
-*Subdivision and projection create the triangular primal mesh. Connecting adjacent primal-face centres creates one dual cell around every primal vertex; degree five produces a pentagon and degree six a hexagon.*
+*Subdivision and projection create the triangular primal mesh. Connecting
+adjacent primal-face centers creates the dual mesh.*
+
+The triangles form the **primal mesh**. Connecting adjacent triangle centers
+across each primal edge creates the **dual mesh**, with one dual cell around
+every primal vertex. The 12 vertices inherited from the icosahedron have degree
+five and produce pentagons; every other vertex has degree six and produces a
+hexagon.[^simpson-heikes-taflove-2006]
+
+The pentagons are not implementation defects. They supply the curvature needed
+to close a predominantly hexagonal network over a sphere.
+
+![Subdivision-2 geodesic dual grid wrapped around the Earth. Purple cells highlight the topologically required pentagons among the hexagons.](images/geodesic-grid.png)
+
+*The subdivision-2 grid has 162 dual cells. Purple highlights identify visible
+members of the 12 required pentagons.*
+
+## Resolution determines observability
+
+Quartering every triangle makes the surface count grow by a factor of four per
+level. Representative scales are:
+
+| Level | Surface cells | Approximate center spacing |
+|---:|---:|---:|
+| 1 | 42 | 3,765 km |
+| 2 | 162 | 1,910 km |
+| 3 | 642 | 962 km |
+| 6 | 40,962 | about 120 km |
+| 7 | 163,842 | about 60 km |
+| 8 | 655,362 | about 30 km |
+
+![The same illustrative conductivity target sampled on subdivision levels 2, 6, and 8, showing how a feature becomes numerically observable only when several cells resolve it](images/grid-resolution-observability.svg)
+
+*A 20 Hz free-space wavelength is about 15,000 km, but an 80 km material
+feature remains unresolved when cell centers are roughly 120 km apart.*
+
+Wave resolution and material resolution are different requirements. Adding a
+detailed anomaly to the input does not make it exist numerically if no electric
+degree of freedom resolves its support. The CLI therefore warns when the
+chosen horizontal or radial grid cannot observe a requested anomaly.
+
+A laptop smoke run at subdivision 2 is useful for checking setup and
+visualization, not for making a quantitatively resolved Earth claim. The paper
+studies use subdivisions 7–8, increasing one radial plane from 162 cells to
+163,842 or 655,362 cells. That gap is part of the experiment rather than a
+mere performance setting.
 
 ## Topology first, metric second
 
-Every primal edge is stored from `tail` to `head`. Once the adjacent faces are known, the positive dual direction is defined from the right face to the left face. This single convention supports four reusable discrete operators:
+Every primal edge is stored from `tail` to `head`. With its adjacent faces
+known, the positive dual direction runs from the right face to the left face.
+This convention supports four reusable operators:
 
 - `edge_difference`: head minus tail on a primal edge;
-- `dual_edge_difference`: left face minus right face across that edge;
-- `face_circulation`: signed sum around a triangular primal face;
-- `dual_cell_circulation`: signed sum around a pentagonal or hexagonal dual cell.
+- `dual_edge_difference`: left face minus right face across the edge;
+- `face_circulation`: oriented sum around a triangular primal face;
+- `dual_cell_circulation`: oriented sum around a pentagonal or hexagonal cell.
 
-The signs are purely topological. Physical scale enters through spherical arc lengths and solid angles. On a sphere of radius $r$,
+The signs are topological. Metric scale enters through arc lengths and solid
+angles. On a sphere of radius $r$,
 
 $$
 \ell_p=r\theta_p,\qquad
@@ -47,184 +99,48 @@ $$
 A=r^2\Omega,
 $$
 
-where $\theta_p$ and $\theta_d$ are primal and dual central angles and $\Omega$ is a face or dual-cell solid angle. The mesh builder checks that both the primal and dual areas sum to $4\pi$ on the unit sphere. These closure checks catch geometry errors before a time step is taken.
-
-This separation between incidence and metric is one of the design's most useful ideas. Connectivity is built once. The same angular mesh can then be evaluated at every radial plane simply by multiplying by that plane's radius.
+where $\theta_p$ and $\theta_d$ are central angles and $\Omega$ is a face or
+dual-cell solid angle. The same incidence tables can therefore be reused on
+every concentric shell while one-dimensional radius factors supply physical
+length and area.
 
 ![Directed primal edge from tail to head crossed by the positive dual edge from the right face to the left face, alongside the separation between incidence operators and spherical metric factors](images/primal-dual-orientation-metric.svg)
 
-*The directed crossing fixes head-minus-tail and left-minus-right signs. Integer incidence tables can therefore be reused on every shell, while radius-dependent arc lengths and areas supply the physical scale.*
+*The crossing convention fixes every difference and circulation sign.
+Connectivity is stored once; radius-dependent metric factors are applied at
+the field's actual shell.*
 
-## Where the fields live
+## Turning curl into finite operations
 
-The three-dimensional domain alternates two types of spherical plane:
+Faraday's law says that magnetic flux changes according to electric-field
+circulation around a surface. Ampère–Maxwell law makes the dual statement for
+electric flux, magnetic circulation, and current. On this mesh, a circulation
+is a signed edge sum multiplied by edge lengths and divided by the enclosed
+area.
 
-- integer-radius **TM-r planes** carry $E_r$ on dual cells (primal vertices) and $H_t$ on edges;
-- half-radius **TE-r planes** carry $H_r$ on primal triangles and $E_t$ on edges.
-
-The arrays make this placement explicit:
-
-```text
-er[dual_cell, radial_node]
-ht[edge,      radial_node]
-et[edge,      radial_half_node]
-hr[triangle,  radial_half_node]
-```
-
-Electric and magnetic fields are also staggered by half a time step. The scheme first advances magnetic fields from the current electric fields, then advances electric fields from the new magnetic fields. This is the familiar leapfrog structure of the Yee algorithm, adapted to spherical primal–dual surfaces.[^yee-1966][^simpson-heikes-taflove-2006]
-
-![Schematic of alternating TM-r and TE-r spherical planes with Er, Ht, Hr, and Et locations, paired with the leapfrog sequence of electric integer times and magnetic half times](images/radial-temporal-staggering.svg)
-
-*Spatial and temporal staggering solve different alignment problems. Radial midpoint fields make $D_r$ land on the opposite plane type, while half-time magnetic fields let Faraday and Ampère updates alternate without solving a simultaneous system.*
-
-## The four update equations
-
-In compact mathematical form, one complete update is
+For a primal triangular face $p$,
 
 $$
-\begin{aligned}
-H_t^{n+1/2} &= H_t^{n-1/2}
-  + \frac{\Delta t}{\mu_0}\left(D_sE_r^n-D_rE_t^n\right), \\
-H_r^{n+1/2} &= H_r^{n-1/2}
-  - \frac{\Delta t}{\mu_0}C_pE_t^n, \\
-E_r^{n+1} &= C_aE_r^n
-  + C_b\left(C_dH_t^{n+1/2}-J_r^{n+1/2}\right), \\
-E_t^{n+1} &= C_aE_t^n
-  + C_b\left(D_dH_r^{n+1/2}-D_rH_t^{n+1/2}\right).
-\end{aligned}
+(\nabla\times E)_p
+\approx \frac{1}{A_p}
+\sum_{e\in\partial p}s_{pe}E_{t,e}\ell_{p,e}.
 $$
 
-Here $D_s$ and $D_d$ are primal and dual surface differences, $D_r$ is a radial difference, and $C_p$ and $C_d$ are primal-face and dual-cell circulation operators.
+A dual pentagon or hexagon uses the same expression with five or six boundary
+edges. Neighboring cells see a shared edge with opposite signs, which is the
+discrete cancellation required by an oriented closed mesh.
 
-```mermaid
-flowchart LR
-    E0["Eⁿ"] --> M["Faraday update"] --> H1["Hⁿ⁺¹ᐟ²"]
-    H1 --> A["Ampère update<br/>including Jⁿ⁺¹ᐟ²"] --> E1["Eⁿ⁺¹"]
-    E1 -. "next step" .-> M
-```
+The mesh builder checks closed incidence, exactly 12 degree-five vertices, and
+both primal and dual area sums against $4\pi$ on the unit sphere. Those checks
+catch missing cells, duplicate boundaries, and sign errors before time
+integration begins.[^mesh-tests]
 
-Each expression is an integral Maxwell update divided by its associated length or area.
-
-The local stencils below follow the staggered field placement illustrated in Figures 3 and 4 of Simpson, Heikes, and Taflove (2006), but redraw it in the notation used by this implementation.[^simpson-heikes-taflove-2006] They are explanatory schematics rather than reproductions of the published figures: blue marks electric degrees of freedom, orange marks magnetic degrees of freedom, and the gold ring identifies the value being updated.
-
-### 1. Tangential magnetic field
-
-The surface gradient of $E_r$ is a head-minus-tail difference divided by the primal edge length. The radial derivative of $E_t$ is evaluated between staggered radial locations. Their difference advances $H_t$:
-
-$$
-H_t^{n+1/2}=H_t^{n-1/2}
-+\frac{\Delta t}{\mu_0}
-\left(\nabla_s E_r^n-\partial_r E_t^n\right).
-$$
-
-![Tangential magnetic update stencil. On the surface, radial electric fields occupy the two primal-edge endpoints while the target tangential magnetic field occupies the crossing dual edge. Radially, tangential electric fields lie on the TE-r planes above and below the target TM-r plane.](images/update-ht-stencil.svg)
-
-*The $H_t$ update combines the surface difference $D_sE_r$ with the radial difference $D_rE_t$ at one primal/dual edge pair.*
-
-At the two radial ends, the zero tangential-electric boundary is incorporated with a one-sided doubled difference.
-
-### 2. Radial magnetic field
-
-The oriented circulation of $E_t\ell_p$ around each primal triangle is divided by the triangular area. Faraday's law then advances $H_r$:
-
-$$
-H_r^{n+1/2}=H_r^{n-1/2}
--\frac{\Delta t}{\mu_0 A_p}
-\sum_{e\in\partial p}s_{pe}E_{t,e}^n\ell_{p,e}.
-$$
-
-![Radial magnetic update stencil. Three tangential electric fields lie on the oriented edges of a triangular primal face, and the target radial magnetic field lies at its center.](images/update-hr-stencil.svg)
-
-*The $H_r$ update applies the primal-face circulation $C_pE_t$ around one TE-r triangle and divides by its area.*
-
-### 3. Radial electric field
-
-Ampère's law uses the circulation of $H_t\ell_d$ around each dual cell. The source enters as radial current density $J_r$: total source current is divided by the cell area at each selected location.
-
-For a conductive material, a trapezoidal treatment of $\sigma E$ gives
-
-$$
-C_a=\frac{1-\sigma\Delta t/(2\epsilon)}
-{1+\sigma\Delta t/(2\epsilon)},\qquad
-C_b=\frac{\Delta t/\epsilon}
-{1+\sigma\Delta t/(2\epsilon)}.
-$$
-
-The update is
-
-$$
-E_r^{n+1}=C_aE_r^n+C_b
-\left(\frac{1}{A_d}\sum_{e\in\partial d}s_{de}H_{t,e}^{n+1/2}\ell_{d,e}-J_r^{n+1/2}\right).
-$$
-
-![Radial electric update stencil. Tangential magnetic fields circulate around the boundary of a hexagonal dual cell, while radial electric field and source current occupy the dual-cell center. A pentagonal cell uses the same stencil with five boundary fields.](images/update-er-stencil.svg)
-
-*The $E_r$ update applies the dual-cell circulation $C_dH_t$, divides by $A_d$, and subtracts the collocated radial current density $J_r$.*
-
-Both $C_a$ and $C_b$ are precomputed at every electric-field location, so a heterogeneous lossy model does not add branches to the time loop.
-
-### 4. Tangential electric field
-
-Finally, a left-minus-right difference of $H_r$ across each edge is divided by the dual-edge length. After subtracting the radial difference of $H_t$, the same lossy coefficients advance $E_t$:
-
-$$
-E_t^{n+1}=C_aE_t^n+C_b
-\left(\nabla_d H_r^{n+1/2}-\partial_r H_t^{n+1/2}\right).
-$$
-
-![Tangential electric update stencil. On the surface, radial magnetic fields occupy the adjacent left and right triangle centers while the target tangential electric field occupies their shared primal edge. Radially, tangential magnetic fields lie on the TM-r planes above and below the target TE-r plane.](images/update-et-stencil.svg)
-
-*The $E_t$ update combines the dual difference $D_dH_r$ across the edge with the radial difference $D_rH_t$ between neighbouring TM-r planes.*
-
-## Nonuniform radial spacing
-
-The surface topology is shared by all layers, but radial nodes do not have to be uniform. Differences of $E_t$ at an interior TM-r plane are divided by the distance between neighbouring radial midpoints. Differences of $H_t$ on a TE-r plane are divided by the corresponding full radial-cell width.
-
-This lets the grid resolve a thin near-surface anomaly with 1.25 km cells while retaining much larger cells far from sea level. The radial-stack diagram above remains valid when neighbouring $\Delta r_i$ differ. Nonuniform spacing also creates a stability consequence: the smallest radial interval limits the global time step.
-
-## A geometry-aware Courant limit
-
-The implementation estimates a conservative stable step from the smallest primal arc, dual arc, and radial interval:
-
-$$
-\Delta t_{\max}=\frac{S}{c_0
-\sqrt{\ell_{p,\min}^{-2}+\ell_{d,\min}^{-2}+(2/\Delta r_{\min})^2}},
-$$
-
-where $S$ is a user-controlled Courant factor, 0.35 by default. A requested step larger than this estimate is rejected rather than silently producing an unstable run.[^solver-source]
-
-This estimate is intentionally conservative. On an irregular grid, quoting only the Cartesian $c\Delta t/\Delta x$ condition would ignore the dual geometry and the radial staggering that actually appear in the update.
-
-## Source injection without grid snapping
-
-The radial-current source is evaluated at the half-time step. Spatially, it is distributed over the three vertices of the containing triangle using barycentric weights $\lambda_0,\lambda_1,\lambda_2$. Radially, linear weights $1-\alpha$ and $\alpha$ represent its exact altitude on adjacent $E_r$ planes. Their outer product produces at most six combined weights $w_i$ with $\sum_i w_i=1$.[^source-source]
-
-![Source distribution diagram showing three barycentric surface weights, two linear radial weights, their six combined Er degrees of freedom, and preservation of the current element moment](images/source-staggered-distribution.svg)
-
-*The source stencil follows the physical location rather than the nearest vertex or radial plane. A source exactly on a radial plane uses only the three surface vertices.*
-
-For a vertical current element of length $\ell_s$, the injected volume-current density at degree of freedom $i$ is
-
-$$
-J_{r,i}=\frac{w_i I(t)\ell_s}{A_{d,i}\,\Delta r_{c,i}},\qquad
-\sum_i J_{r,i}A_{d,i}\Delta r_{c,i}=I(t)\ell_s,
-$$
-
-where $\Delta r_{c,i}$ is the radial-node control length. Dividing by the local dual-cell volume converts current moment to current density, while normalized weights preserve the total current moment. This matters even more as the grid is refined or made nonuniform: a source definition should describe a physical location, not an array index.[^source-source]
-
-## What the algorithm gets right—and what remains
-
-The mesh tests verify closed topology, degree-five/degree-six incidence, orientation, and area closure. Solver tests verify stationary zero fields, finite source-driven fields, material damping, exact source moments, nonuniform radial stepping, and rejection of an unstable time step. Cross-backend tests require NumPy and PyTorch double-precision fields to agree after multiple steps.[^repository-tests]
-
-The global validation provides a harder test. Waveform morphology and uniform-model convergence are encouraging, and grid-induced directional asymmetry decreases with refinement. At the paper-scale subdivision-7 grid, the measured maximum directional spread stays below 0.295% over the evaluated band. In the heterogeneous production model, ETOPO5 relief and bounded oceanic/continental profiles restore strong physical east–west nonidentity, but the relative peak ordering still differs from the published Figure 7. Strict pointwise attenuation reproduction also fails: the subdivision-8 production maxima are $2.538\,\mathrm{dB/Mm}$ on A–B and $3.258\,\mathrm{dB/Mm}$ on A′–B′. The error budget therefore includes physical-input uncertainty and finite radial and crustal modelling as well as spatial dispersion—not merely floating-point precision.[^verification-2004]
-
-That is why grid design and validation cannot be separated. A topologically correct update can still be quantitatively under-resolved.
-
-In Part 3, we will translate these operators into NumPy, including the incidence-table technique that makes pentagon and hexagon circulations vectorizable without a Python loop over cells.
+The sphere is now an oriented finite operator, but no field has advanced yet.
+[Part 3](03-spherical-fdtd-time-stepping.md) stacks these surfaces radially,
+places $E_r$, $E_t$, $H_r$, and $H_t$ on staggered degrees of freedom, and
+turns the curl operators into one leapfrog time step.
 
 ## References
-
-[^yee-1966]: K. S. Yee, “Numerical Solution of Initial Boundary Value Problems Involving Maxwell's Equations in Isotropic Media,” *IEEE Transactions on Antennas and Propagation*, 14(3), 302–307, 1966, [doi:10.1109/TAP.1966.1138693](https://doi.org/10.1109/TAP.1966.1138693).
 
 [^randall-2002]: D. A. Randall, T. D. Ringler, R. P. Heikes, P. Jones, and J. Baumgardner, “Climate Modeling with Spherical Geodesic Grids,” *Computing in Science & Engineering*, 4(5), 32–41, 2002, [doi:10.1109/MCISE.2002.1032427](https://doi.org/10.1109/MCISE.2002.1032427).
 
@@ -232,10 +148,4 @@ In Part 3, we will translate these operators into NumPy, including the incidence
 
 [^mesh-source]: Ionosphere FDTD project, “[Geodesic mesh implementation](../../src/ionosphere_fdtd/mesh.py).”
 
-[^solver-source]: Ionosphere FDTD project, “[Simulation configuration and geometry-aware time-step check](../../src/ionosphere_fdtd/solver.py).”
-
-[^source-source]: Ionosphere FDTD project, “[Spatially weighted source implementation](../../src/ionosphere_fdtd/sources.py).”
-
-[^repository-tests]: Ionosphere FDTD project, [`test_mesh.py`](../../tests/test_mesh.py), [`test_solver.py`](../../tests/test_solver.py), and [`test_backends.py`](../../tests/test_backends.py).
-
-[^verification-2004]: Ionosphere FDTD project, “[Final Simpson–Taflove 2004 Verification Report](../verification/simpson-taflove-2004.md),” production rerun dated 2026-08-06.
+[^mesh-tests]: Ionosphere FDTD project, “[Geodesic topology and quality tests](../../tests/test_mesh.py).”
