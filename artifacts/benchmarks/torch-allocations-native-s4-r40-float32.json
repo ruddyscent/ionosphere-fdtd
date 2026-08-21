@@ -1,0 +1,235 @@
+{
+  "system": {
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "torch": "2.13.0+cu130",
+    "cuda": "13.0",
+    "device": "cuda:0",
+    "device_name": "NVIDIA GeForce RTX 2060 SUPER"
+  },
+  "configuration": {
+    "subdivision": 4,
+    "radial_cells": 40,
+    "dtype": "float32",
+    "steps": 8,
+    "warmup_steps": 4,
+    "torch_fast_path": true
+  },
+  "profiled_regions": [
+    "GeodesicFDTD._update_magnetic_fields",
+    "GeodesicFDTD._update_electric_fields",
+    "GeodesicFDTD._radial_derivative_et",
+    "GeodesicFDTD._radial_derivative_ht",
+    "TorchBackend.face_circulation",
+    "TorchBackend.dual_cell_circulation"
+  ],
+  "field_memory_bytes": 3727688,
+  "persistent_backend_bytes": 11645520,
+  "torch_workspace_bytes": 3727688,
+  "device_memory_before_profile_bytes": 11650560,
+  "peak_device_memory_bytes": 15336960,
+  "allocation_operators": [
+    {
+      "operator": "aten::index",
+      "calls": 48,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 20176896,
+      "input_shapes": [
+        [
+          7680,
+          41
+        ],
+        []
+      ]
+    },
+    {
+      "operator": "aten::index",
+      "calls": 16,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 20152320,
+      "input_shapes": [
+        [
+          2562,
+          41
+        ],
+        []
+      ]
+    },
+    {
+      "operator": "aten::index",
+      "calls": 24,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 19660800,
+      "input_shapes": [
+        [
+          7680,
+          40
+        ],
+        []
+      ]
+    },
+    {
+      "operator": "aten::index",
+      "calls": 16,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 19660800,
+      "input_shapes": [
+        [
+          5120,
+          40
+        ],
+        []
+      ]
+    },
+    {
+      "operator": "aten::mul",
+      "calls": 16,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 19660800,
+      "input_shapes": [
+        [
+          7680,
+          40
+        ],
+        [
+          40
+        ]
+      ]
+    },
+    {
+      "operator": "aten::mul",
+      "calls": 16,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 19169280,
+      "input_shapes": [
+        [
+          7680,
+          39
+        ],
+        [
+          39
+        ]
+      ]
+    },
+    {
+      "operator": "aten::sub",
+      "calls": 8,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 9830400,
+      "input_shapes": [
+        [
+          7680,
+          40
+        ],
+        [
+          7680,
+          40
+        ],
+        []
+      ]
+    },
+    {
+      "operator": "aten::div",
+      "calls": 8,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 9830400,
+      "input_shapes": [
+        [
+          7680,
+          40
+        ],
+        [
+          40
+        ]
+      ]
+    },
+    {
+      "operator": "aten::mul",
+      "calls": 8,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 9830400,
+      "input_shapes": [
+        [
+          7680,
+          40
+        ],
+        [
+          1,
+          40
+        ]
+      ]
+    },
+    {
+      "operator": "aten::sub",
+      "calls": 8,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 9584640,
+      "input_shapes": [
+        [
+          7680,
+          39
+        ],
+        [
+          7680,
+          39
+        ],
+        []
+      ]
+    },
+    {
+      "operator": "aten::div",
+      "calls": 8,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 9584640,
+      "input_shapes": [
+        [
+          7680,
+          39
+        ],
+        [
+          39
+        ]
+      ]
+    },
+    {
+      "operator": "aten::mul",
+      "calls": 8,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 9584640,
+      "input_shapes": [
+        [
+          7680,
+          39
+        ],
+        [
+          1,
+          39
+        ]
+      ]
+    },
+    {
+      "operator": "aten::mul",
+      "calls": 48,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 1474560,
+      "input_shapes": [
+        [
+          7680
+        ],
+        []
+      ]
+    },
+    {
+      "operator": "aten::div",
+      "calls": 16,
+      "self_cpu_allocation_bytes": 0,
+      "self_device_allocation_bytes": 491520,
+      "input_shapes": [
+        [
+          7680
+        ],
+        []
+      ]
+    }
+  ]
+}

@@ -85,6 +85,86 @@ and
 This benchmark has no source or observation consumer, so it isolates field-step
 batching; it does not measure source-current transfer or observation sampling.
 
+## Native fast-path prototype decision
+
+The 2026-08-22 experiment built a PyTorch-native stepper prototype with
+preweighted incidence tables and four reusable full-field workspaces. It also
+evaluated single-device CUDA Graph replay independently from TorchInductor.
+Every cell below is the median of three synchronized repeats from the same
+source tree. Chunked modes use 32 steps. The subdivision-2 `float32` and
+subdivision-6 rows ran on an RTX 2060 SUPER; subdivision-2 `float64` and
+subdivision-4 ran on an RTX 3060. Modes within each row always use the same
+GPU, initial fields, dtype, warm-up, and measured step count.
+
+| Grid | Dtype | NumPy CPU | CUDA eager | Compiled | Native eager | Native compiled | CUDA Graph |
+|---|---|---:|---:|---:|---:|---:|---:|
+| s2 / r16 | `float32` | 3058.7 | 1175.4 | 36785.5 | 1217.1 | 28514.5 | 6343.3 |
+| s2 / r16 | `float64` | 2385.1 | 1147.4 | 28659.1 | 1041.9 | 19786.5 | 9262.2 |
+| s4 / r40 | `float32` | 95.5 | 904.6 | 11807.3 | 405.3 | 9398.8 | 2940.3 |
+| s4 / r40 | `float64` | 44.7 | 1067.7 | 3055.1 | 1173.8 | 2891.2 | 1339.5 |
+| s6 / r80 | `float32` | 3.1 | 91.3 | 544.0 | 96.5 | 420.0 | 96.5 |
+| s6 / r80 | `float64` | 1.7 | 48.2 | 148.3 | 51.3 | 133.7 | 51.3 |
+
+Values are steps/s. Native eager improved the production s6 case by 5.7% in
+`float32` and 6.3% in `float64`, and improved s4 `float64` by 9.9%. It regressed
+s4 `float32` and both native compiled variants were slower than the existing
+compiled graph. CUDA Graph replay reduced dispatch cost on small grids but
+converged to native-eager throughput on the memory-bound s6 grid. The prototype
+was therefore removed rather than retained as a second solver implementation.
+The existing generic compiled path remains the recommended CUDA mode for long
+runs.
+
+Cold compilation took 50.4--65.0 seconds. CUDA Graph capture took
+0.109--1.317 seconds, depending on grid and dtype. The native workspaces equal
+the four field arrays in size. On s6/r80, persistent `float32` storage rose
+from 225.2 MiB to 340.2 MiB and peak device allocation rose from 417.7 MiB for
+generic eager to 458.2 MiB for native eager. These costs are reported directly
+by the prototype benchmark schema rather than hidden in framework totals.
+Complete measurements are retained as negative-result evidence in
+[`torch-fast-path-2026-08-22.json`](../../artifacts/benchmarks/torch-fast-path-2026-08-22.json).
+
+### Temporary-allocation audit
+
+The PyTorch profiler recorded eight eager s4/r40 `float32` steps after four
+warm-up steps on the RTX 2060 SUPER. Positive self-allocation bytes fell from
+189,505,536 to 178,692,096 (5.7%), while allocation-producing operator calls
+rose from 224 to 248 because indexed gathers still dominate. Persistent solver
+storage rose from 7,794,904 to 11,645,520 bytes and peak live device allocation
+rose from 13,974,016 to 15,336,960 bytes.
+
+The prototype replaced the radial derivative and four curl/update outputs with
+single-writer workspaces and preweighted incidence tables. Although those
+ownership rules were safe, the profiler shows that indexed topology gathers
+remain the primary allocation and memory-traffic target. The small allocation
+reduction did not repay the extra persistent memory, divergent update logic,
+or compiled regression. This result does not justify retaining the prototype
+or adding a custom kernel without a separate deterministic gather and layout
+study.
+
+The generic inventory and historical prototype inventory are
+[`torch-allocations-generic-s4-r40-float32.json`](../../artifacts/benchmarks/torch-allocations-generic-s4-r40-float32.json)
+and
+[`torch-allocations-native-s4-r40-float32.json`](../../artifacts/benchmarks/torch-allocations-native-s4-r40-float32.json).
+Separate synthetic-input inventories cover the generic
+[`surface-impedance`](../../artifacts/benchmarks/torch-allocations-surface-impedance-s2-r16-float32.json)
+and
+[`plasma`](../../artifacts/benchmarks/torch-allocations-plasma-s2-r16-float32.json)
+paths. The maintained runtime continues to use the shared generic update path
+for every supported physics configuration.
+
+Reproduce the maintained generic inventory with:
+
+```bash
+uv run --extra pytorch python -m benchmarks.torch_allocations \
+  --device cuda --subdivision 4 --radial-cells 40 \
+  --dtype float32 --steps 8 --warmup-steps 4 \
+  --output allocations.json
+```
+
+Pass `--physics surface-impedance` or `--physics plasma` to audit those paths
+with deterministic synthetic inputs. The historical native inventory is
+retained for the decision record but is not a maintained execution mode.
+
 ## Reproduction
 
 Run an eager `float32` comparison:
