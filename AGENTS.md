@@ -25,6 +25,36 @@ Generate an icosphere and its pentagon-hexagon dual topology with NumPy.
 Document the supported subdivision levels and verify spherical area closure.
 ```
 
+## Merge workflow
+
+The `master` branch is protected by an active repository ruleset with no bypass
+actors. Use this workflow for every change:
+
+1. Start from an up-to-date `master` and create a topic branch. Never commit or
+   push directly to `master`, force-push it, or delete it.
+2. Keep commits focused and follow the commit-message rules above. Push the
+   topic branch and open a pull request targeting `master`.
+3. Format the pull request title as a Conventional Commit because it becomes
+   the squashed commit title. Write a useful pull request body because it
+   becomes the squashed commit body.
+4. Resolve every review conversation. No approving review is currently
+   required, but unresolved conversations block merging.
+5. Keep the pull request branch up to date with `master`. The required status
+   checks run under a strict policy and must pass against the latest target
+   branch state:
+   - `test (3.11)`
+   - `test (3.12)`
+6. Wait for CodeQL analysis to finish. Do not merge if CodeQL reports a security
+   alert rated High or higher, a code-scanning alert rated Error, a failed
+   analysis, or missing results. Investigate and fix a real alert; dismiss an
+   alert only when there is documented evidence that it is a false positive.
+7. Squash-merge the pull request. Merge commits and rebase merges are disabled,
+   and linear history is required, so `master` receives one commit per merged
+   pull request.
+8. After the merge, update the local `master` with a fast-forward pull and
+   remove the topic branch when it is no longer needed. GitHub does not delete
+   merged branches automatically for this repository.
+
 ## Verification reports
 
 - Keep verification reports concise and in English. Do not create parallel
