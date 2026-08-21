@@ -3,6 +3,7 @@ import pytest
 from benchmarks.backend_matrix import run_backend_matrix
 from benchmarks.backend_scaling import benchmark_cases
 from benchmarks.distributed_scaling import summarize_distributed_timings
+from benchmarks.torch_allocations import profile_allocations
 
 
 def test_backend_matrix_always_reports_numpy_cpu() -> None:
@@ -59,3 +60,21 @@ def test_distributed_timing_uses_median_slow_rank_duration() -> None:
     }
     with pytest.raises(ValueError, match="positive"):
         summarize_distributed_timings([], 12)
+
+
+def test_torch_allocation_profiler_reports_generic_cpu_operators() -> None:
+    pytest.importorskip("torch")
+
+    payload = profile_allocations(
+        subdivision=0,
+        radial_cells=2,
+        dtype="float32",
+        device="cpu",
+        steps=1,
+        warmup_steps=0,
+    )
+
+    assert payload["configuration"]["physics"] == "vacuum"
+    assert payload["field_memory_bytes"] > 0
+    assert payload["persistent_backend_bytes"] >= payload["field_memory_bytes"]
+    assert payload["allocation_operators"]
