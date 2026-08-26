@@ -179,6 +179,33 @@ class SimulationConfig:
                 )
 
 
+@dataclass(frozen=True, slots=True)
+class _StaticSimulationData:
+    """Host-prepared geometry, material, source, and time-step data."""
+
+    altitudes_m: NDArray[np.float64]
+    radii_m: NDArray[np.float64]
+    radial_midpoints_m: NDArray[np.float64]
+    radial_midpoint_altitudes_m: NDArray[np.float64]
+    radial_steps_m: NDArray[np.float64]
+    radial_node_control_lengths_m: NDArray[np.float64]
+    sigma_er: NDArray[np.float64]
+    epsilon_r_er: NDArray[np.float64]
+    sigma_et: NDArray[np.float64]
+    epsilon_r_et: NDArray[np.float64]
+    cfl_time_step_limit_s: float
+    maximum_stable_time_step_s: float
+    time_step_s: float
+    source_distribution: tuple[
+        NDArray[np.int64], NDArray[np.int64], NDArray[np.float64]
+    ] | None
+    tangential_source_distribution: tuple[
+        NDArray[np.int64], NDArray[np.int64], NDArray[np.float64]
+    ] | None
+    anomaly_horizontal_fractions_er: tuple[NDArray[np.float64], ...] | None
+    anomaly_horizontal_fractions_et: tuple[NDArray[np.float64], ...] | None
+
+
 class GeodesicFDTD:
     """Earth-ionosphere FDTD model using staggered geodesic radial planes.
 
@@ -275,59 +302,36 @@ class GeodesicFDTD:
                 "'surface-impedance'"
             )
 
-        if self.config.radial_altitudes_m is None:
-            self.altitudes_m = np.linspace(
-                self.config.minimum_altitude_m,
-                self.config.maximum_altitude_m,
-                self.config.radial_cells + 1,
-            )
-        else:
-            self.altitudes_m = np.asarray(
-                self.config.radial_altitudes_m, dtype=np.float64
-            )
-        self.radii_m = self.config.earth_radius_m + self.altitudes_m
-        self.radial_midpoints_m = 0.5 * (self.radii_m[:-1] + self.radii_m[1:])
-        self.radial_midpoint_altitudes_m = (
-            self.radial_midpoints_m - self.config.earth_radius_m
+        static_data = _prepare_static_simulation(
+            self.config,
+            self.mesh,
+            self.material,
+            self.source,
+            self.plasma,
         )
-        self.radial_steps_m = np.diff(self.radii_m)
-        self.radial_node_control_lengths_m = np.empty(
-            len(self.radii_m), dtype=np.float64
-        )
-        self.radial_node_control_lengths_m[0] = 0.5 * self.radial_steps_m[0]
-        self.radial_node_control_lengths_m[-1] = 0.5 * self.radial_steps_m[-1]
-        self.radial_node_control_lengths_m[1:-1] = np.diff(
-            self.radial_midpoints_m
-        )
-        if plasma is not None:
-            plasma.validate_grid(self.mesh, self.radial_midpoint_altitudes_m)
-
-        # Material permittivity controls the fastest supported wave speed, so it
-        # must be known before an automatic or user-supplied time step is
-        # validated.  Keep sampling separate from coefficient construction:
-        # the latter depends on dt, while the former does not.
-        self._sample_material_properties()
-        self.cfl_time_step_limit_s = self._estimate_cfl_time_step_limit()
-        self.maximum_stable_time_step_s = (
-            self.config.courant_factor * self.cfl_time_step_limit_s
-        )
-        self.time_step_s = (
-            self.config.time_step_s
-            if self.config.time_step_s is not None
-            else self.maximum_stable_time_step_s
-        )
-        if self.time_step_s > self.maximum_stable_time_step_s * (1.0 + 1.0e-12):
-            raise ValueError(
-                f"time step {self.time_step_s:.6e} s exceeds conservative limit "
-                f"{self.maximum_stable_time_step_s:.6e} s"
-            )
-        if (
-            self.source is not None
-            and self.source.carrier_frequency_hz
-            >= 0.5 / self.time_step_s
+        for name in (
+            "altitudes_m",
+            "radii_m",
+            "radial_midpoints_m",
+            "radial_midpoint_altitudes_m",
+            "radial_steps_m",
+            "radial_node_control_lengths_m",
+            "sigma_er",
+            "epsilon_r_er",
+            "sigma_et",
+            "epsilon_r_et",
+            "cfl_time_step_limit_s",
+            "maximum_stable_time_step_s",
+            "time_step_s",
         ):
-            raise ValueError(
-                "source carrier frequency must be below the time-step Nyquist limit"
+            setattr(self, name, getattr(static_data, name))
+        if static_data.anomaly_horizontal_fractions_er is not None:
+            self.anomaly_horizontal_fractions_er = (
+                static_data.anomaly_horizontal_fractions_er
+            )
+        if static_data.anomaly_horizontal_fractions_et is not None:
+            self.anomaly_horizontal_fractions_et = (
+                static_data.anomaly_horizontal_fractions_et
             )
 
         self.er = self.backend.zeros((self.mesh.n_vertices, len(self.radii_m)))
@@ -362,18 +366,18 @@ class GeodesicFDTD:
 
         self._prepare_geometry()
         self._prepare_optional_physics_coefficients()
-        self._prepare_material_coefficients()
+        self._prepare_material_coefficients(static_data)
         self._source_distribution = None
         self._tangential_source_distribution = None
-        if isinstance(self.source, TangentialGaussianCurrent):
-            edges, layers, weights = self.source.edge_distribution(self)
+        if static_data.tangential_source_distribution is not None:
+            edges, layers, weights = static_data.tangential_source_distribution
             self._tangential_source_distribution = (
                 self.backend.index_array(edges),
                 self.backend.index_array(layers),
                 self.backend.asarray(weights),
             )
-        elif self.source is not None:
-            vertices, layers, weights = self.source.staggered_distribution(self)
+        elif static_data.source_distribution is not None:
+            vertices, layers, weights = static_data.source_distribution
             self._source_distribution = (
                 self.backend.index_array(vertices),
                 self.backend.index_array(layers),
@@ -1013,36 +1017,18 @@ class GeodesicFDTD:
             epsilon_r[begin:end] = chunk_epsilon
         return sigma, epsilon_r
 
-    def _prepare_material_coefficients(self) -> None:
+    def _prepare_material_coefficients(
+        self, static_data: _StaticSimulationData
+    ) -> None:
         """Build lossy electric-field update coefficients at the selected dt."""
 
         if self.material_tensors is not None:
             self._prepare_tensor_material_coefficients()
             return
 
-        epsilon_er = EPSILON_0 * self.epsilon_r_er
-        epsilon_et = EPSILON_0 * self.epsilon_r_et
-        sigma_er = self.sigma_er
-        sigma_et = self.sigma_et
-        if self.config.loss_integration == "trapezoidal":
-            loss_er = sigma_er * self.time_step_s / (2.0 * epsilon_er)
-            loss_et = sigma_et * self.time_step_s / (2.0 * epsilon_et)
-            ca_er = (1.0 - loss_er) / (1.0 + loss_er)
-            cb_er = self.time_step_s / (epsilon_er * (1.0 + loss_er))
-            ca_et = (1.0 - loss_et) / (1.0 + loss_et)
-            cb_et = self.time_step_s / (epsilon_et * (1.0 + loss_et))
-        else:
-            ca_er, cb_er = self._exponential_loss_coefficients(
-                sigma_er, epsilon_er
-            )
-            ca_et, cb_et = self._exponential_loss_coefficients(
-                sigma_et, epsilon_et
-            )
-        if self.config.compress_uniform_material_coefficients:
-            ca_er = self._uniform_radial_profile(ca_er, "radial electric")
-            cb_er = self._uniform_radial_profile(cb_er, "radial electric")
-            ca_et = self._uniform_radial_profile(ca_et, "tangential electric")
-            cb_et = self._uniform_radial_profile(cb_et, "tangential electric")
+        ca_er, cb_er, ca_et, cb_et = _host_material_update_coefficients(
+            static_data, self.config
+        )
         self._ca_er = self.backend.asarray(ca_er)
         self._cb_er = self.backend.asarray(cb_er)
         self._ca_et = self.backend.asarray(ca_et)
@@ -2013,3 +1999,181 @@ class GeodesicFDTD:
         if self._plasma_coupler is not None:
             total += self._plasma_coupler.persistent_bytes
         return total
+
+
+class _StaticPreparationContext:
+    """Lightweight host-only context for shared static preparation."""
+
+    _sample_material_properties = GeodesicFDTD._sample_material_properties
+    _dual_cell_material_average = GeodesicFDTD._dual_cell_material_average
+    _validated_material_sample = staticmethod(
+        GeodesicFDTD._validated_material_sample
+    )
+    _estimate_cfl_time_step_limit = GeodesicFDTD._estimate_cfl_time_step_limit
+
+
+def _prepare_static_simulation(
+    config: SimulationConfig,
+    mesh: GeodesicMesh,
+    material: EarthIonosphereMaterial,
+    source: GaussianCurrent | TangentialGaussianCurrent | None,
+    plasma: MeshPlasmaModel | None,
+) -> _StaticSimulationData:
+    """Prepare host metadata without allocating evolving field arrays."""
+
+    context = _StaticPreparationContext()
+    context.config = config
+    context.mesh = mesh
+    context.material = material
+    context.source = source
+    context.plasma = plasma
+    if config.radial_altitudes_m is None:
+        context.altitudes_m = np.linspace(
+            config.minimum_altitude_m,
+            config.maximum_altitude_m,
+            config.radial_cells + 1,
+        )
+    else:
+        context.altitudes_m = np.asarray(
+            config.radial_altitudes_m, dtype=np.float64
+        )
+    context.radii_m = config.earth_radius_m + context.altitudes_m
+    context.radial_midpoints_m = 0.5 * (
+        context.radii_m[:-1] + context.radii_m[1:]
+    )
+    context.radial_midpoint_altitudes_m = (
+        context.radial_midpoints_m - config.earth_radius_m
+    )
+    context.radial_steps_m = np.diff(context.radii_m)
+    context.radial_node_control_lengths_m = np.empty(
+        len(context.radii_m), dtype=np.float64
+    )
+    context.radial_node_control_lengths_m[0] = (
+        0.5 * context.radial_steps_m[0]
+    )
+    context.radial_node_control_lengths_m[-1] = (
+        0.5 * context.radial_steps_m[-1]
+    )
+    context.radial_node_control_lengths_m[1:-1] = np.diff(
+        context.radial_midpoints_m
+    )
+    if plasma is not None:
+        plasma.validate_grid(mesh, context.radial_midpoint_altitudes_m)
+
+    context._sample_material_properties()
+    cfl_time_step_limit_s = context._estimate_cfl_time_step_limit()
+    maximum_stable_time_step_s = (
+        config.courant_factor * cfl_time_step_limit_s
+    )
+    time_step_s = (
+        config.time_step_s
+        if config.time_step_s is not None
+        else maximum_stable_time_step_s
+    )
+    if time_step_s > maximum_stable_time_step_s * (1.0 + 1.0e-12):
+        raise ValueError(
+            f"time step {time_step_s:.6e} s exceeds conservative limit "
+            f"{maximum_stable_time_step_s:.6e} s"
+        )
+    if (
+        source is not None
+        and source.carrier_frequency_hz >= 0.5 / time_step_s
+    ):
+        raise ValueError(
+            "source carrier frequency must be below the time-step Nyquist limit"
+        )
+
+    source_distribution = None
+    tangential_source_distribution = None
+    if isinstance(source, TangentialGaussianCurrent):
+        tangential_source_distribution = source.edge_distribution(context)
+    elif source is not None:
+        source_distribution = source.staggered_distribution(context)
+
+    return _StaticSimulationData(
+        altitudes_m=context.altitudes_m,
+        radii_m=context.radii_m,
+        radial_midpoints_m=context.radial_midpoints_m,
+        radial_midpoint_altitudes_m=context.radial_midpoint_altitudes_m,
+        radial_steps_m=context.radial_steps_m,
+        radial_node_control_lengths_m=context.radial_node_control_lengths_m,
+        sigma_er=context.sigma_er,
+        epsilon_r_er=context.epsilon_r_er,
+        sigma_et=context.sigma_et,
+        epsilon_r_et=context.epsilon_r_et,
+        cfl_time_step_limit_s=cfl_time_step_limit_s,
+        maximum_stable_time_step_s=maximum_stable_time_step_s,
+        time_step_s=time_step_s,
+        source_distribution=source_distribution,
+        tangential_source_distribution=tangential_source_distribution,
+        anomaly_horizontal_fractions_er=getattr(
+            context, "anomaly_horizontal_fractions_er", None
+        ),
+        anomaly_horizontal_fractions_et=getattr(
+            context, "anomaly_horizontal_fractions_et", None
+        ),
+    )
+
+
+def _host_material_update_coefficients(
+    data: _StaticSimulationData,
+    config: SimulationConfig,
+) -> tuple[
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+]:
+    """Return static lossy update coefficients without a compute backend."""
+
+    epsilon_er = EPSILON_0 * data.epsilon_r_er
+    epsilon_et = EPSILON_0 * data.epsilon_r_et
+    if config.loss_integration == "trapezoidal":
+        loss_er = data.sigma_er * data.time_step_s / (2.0 * epsilon_er)
+        loss_et = data.sigma_et * data.time_step_s / (2.0 * epsilon_et)
+        ca_er = (1.0 - loss_er) / (1.0 + loss_er)
+        cb_er = data.time_step_s / (epsilon_er * (1.0 + loss_er))
+        ca_et = (1.0 - loss_et) / (1.0 + loss_et)
+        cb_et = data.time_step_s / (epsilon_et * (1.0 + loss_et))
+    else:
+        ca_er, cb_er = _host_exponential_loss_coefficients(
+            data.sigma_er, epsilon_er, data.time_step_s
+        )
+        ca_et, cb_et = _host_exponential_loss_coefficients(
+            data.sigma_et, epsilon_et, data.time_step_s
+        )
+    if config.compress_uniform_material_coefficients:
+        ca_er = _uniform_radial_profile(ca_er, "radial electric")
+        cb_er = _uniform_radial_profile(cb_er, "radial electric")
+        ca_et = _uniform_radial_profile(ca_et, "tangential electric")
+        cb_et = _uniform_radial_profile(cb_et, "tangential electric")
+    return ca_er, cb_er, ca_et, cb_et
+
+
+def _host_exponential_loss_coefficients(
+    sigma: NDArray[np.float64],
+    epsilon: NDArray[np.float64],
+    time_step_s: float,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Integrate static conductive decay exactly on the host."""
+
+    rate = sigma * time_step_s / epsilon
+    decay = np.exp(-rate)
+    phi1 = np.ones_like(rate)
+    nonzero = rate != 0.0
+    phi1[nonzero] = -np.expm1(-rate[nonzero]) / rate[nonzero]
+    drive = time_step_s / epsilon * phi1
+    return decay, drive
+
+
+def _uniform_radial_profile(
+    values: NDArray[np.float64], label: str
+) -> NDArray[np.float64]:
+    """Return one row after proving exact horizontal uniformity."""
+
+    profile = values[:1]
+    if not np.array_equal(values, np.broadcast_to(profile, values.shape)):
+        raise ValueError(
+            f"cannot compress horizontally varying {label} coefficients"
+        )
+    return profile

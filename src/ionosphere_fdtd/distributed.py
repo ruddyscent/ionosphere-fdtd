@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
 
+from ._torch_runtime import _TorchRuntime
 from .constants import MU_0
 from .materials import EarthIonosphereMaterial
 from .mesh import GeodesicMesh
 from .partition import FieldHalo, SurfacePartition
 from .plasma import MeshPlasmaModel
-from .solver import GeodesicFDTD, SimulationConfig
+from .solver import (
+    SimulationConfig,
+    _host_material_update_coefficients,
+    _prepare_static_simulation,
+    _StaticSimulationData,
+)
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .surface_impedance import (
     ConductiveHalfSpaceSurface,
@@ -251,48 +257,52 @@ class DistributedGeodesicFDTD:
         self.mesh = mesh
         self.material = material or EarthIonosphereMaterial()
         self.source = source
-        self.dtype_name = dtype
-        self.dtype = torch.float32 if dtype == "float32" else torch.float64
         backend_name = distributed.get_backend()
         if device is None:
             if backend_name == "nccl":
                 local_rank = int(os.environ.get("LOCAL_RANK", self.rank))
                 torch.cuda.set_device(local_rank)
-                self.device = torch.device("cuda", local_rank)
+                requested_device = torch.device("cuda", local_rank)
             else:
-                self.device = torch.device("cpu")
+                requested_device = torch.device("cpu")
         else:
-            self.device = torch.device(device)
-            if self.device.type == "cuda" and self.device.index is None:
-                self.device = torch.device("cuda", torch.cuda.current_device())
-        if backend_name == "nccl" and self.device.type != "cuda":
+            requested_device = torch.device(device)
+            if requested_device.type == "cuda" and requested_device.index is None:
+                requested_device = torch.device("cuda", torch.cuda.current_device())
+        if backend_name == "nccl" and requested_device.type != "cuda":
             raise ValueError("the NCCL process group requires one CUDA device per rank")
 
-        template = GeodesicFDTD(
+        self._runtime = _TorchRuntime(device=str(requested_device), dtype=dtype)
+        self.torch = self._runtime.torch
+        self.device = self._runtime.device
+        self.dtype = self._runtime.dtype
+        self.dtype_name = self._runtime.dtype_name
+        static_data = _prepare_static_simulation(
             config,
-            material=self.material,
-            source=self.source,
-            surface_impedance=surface_impedance,
-            mesh=mesh,
-            backend="numpy",
-            dtype="float64",
+            mesh,
+            self.material,
+            self.source,
+            plasma,
         )
-        self.time_step_s = template.time_step_s
-        self.cfl_time_step_limit_s = template.cfl_time_step_limit_s
-        self.maximum_stable_time_step_s = template.maximum_stable_time_step_s
-        self.altitudes_m = template.altitudes_m
-        self.radii_m = template.radii_m
-        self.radial_midpoints_m = template.radial_midpoints_m
-        self.radial_midpoint_altitudes_m = template.radial_midpoint_altitudes_m
-        self.radial_steps_m = template.radial_steps_m
-        self.radial_node_control_lengths_m = template.radial_node_control_lengths_m
+        for name in (
+            "time_step_s",
+            "cfl_time_step_limit_s",
+            "maximum_stable_time_step_s",
+            "altitudes_m",
+            "radii_m",
+            "radial_midpoints_m",
+            "radial_midpoint_altitudes_m",
+            "radial_steps_m",
+            "radial_node_control_lengths_m",
+        ):
+            setattr(self, name, getattr(static_data, name))
         self.steps = 0
         self.time_s = 0.0
         self.compiled = False
         self.backend = SimpleNamespace(
             name="torch-distributed",
             device=str(self.device),
-            dtype_name=dtype,
+            dtype_name=self.dtype_name,
         )
 
         receive = self.rank_partition.receive_halos[0]
@@ -323,9 +333,9 @@ class DistributedGeodesicFDTD:
         self.hr = self._zeros((len(self._face_layout.global_indices), radial_cells))
         self.ht = self._zeros((len(self._ht_layout.global_indices), radial_nodes))
 
-        self._prepare_local_geometry(template)
-        self._prepare_local_coefficients(template)
-        self._prepare_local_sources(template)
+        self._prepare_local_geometry(static_data)
+        self._prepare_local_coefficients(static_data)
+        self._prepare_local_sources(static_data)
         send = self.rank_partition.send_halos[0]
         self.halo_exchange = TorchDistributedHaloExchange(
             torch=torch,
@@ -345,7 +355,7 @@ class DistributedGeodesicFDTD:
                 surface_impedance,
                 edge_count=len(self.rank_partition.owned_edges),
                 time_step_s=self.time_step_s,
-                backend=_TorchArrayAdapter(torch, self.dtype, self.device),
+                backend=_TorchArrayAdapter(self._runtime),
                 global_edge_count=mesh.n_edges,
                 global_edge_indices=self.rank_partition.owned_edges,
             )
@@ -358,17 +368,15 @@ class DistributedGeodesicFDTD:
         self._host_process_group = None
 
     def _zeros(self, shape: tuple[int, int]) -> Any:
-        return self.torch.zeros(shape, dtype=self.dtype, device=self.device)
+        return self._runtime.zeros(shape)
 
     def _tensor(self, values: Any) -> Any:
-        return self.torch.as_tensor(values, dtype=self.dtype, device=self.device)
+        return self._runtime.as_tensor(values)
 
     def _indices(self, values: Any) -> Any:
-        return self.torch.as_tensor(
-            values, dtype=self.torch.long, device=self.device
-        )
+        return self._runtime.index_tensor(values)
 
-    def _prepare_local_geometry(self, template: GeodesicFDTD) -> None:
+    def _prepare_local_geometry(self, static_data: _StaticSimulationData) -> None:
         owned_edges = self.rank_partition.owned_edges
         owned_faces = self.rank_partition.owned_faces
         owned_vertices = self.rank_partition.owned_vertices
@@ -413,18 +421,19 @@ class DistributedGeodesicFDTD:
         self._inverse_dual_cell_solid_angles = self._tensor(
             1.0 / self.mesh.dual_cell_solid_angles[owned_vertices, None]
         )
-        self._radii = self._tensor(template.radii_m)
-        self._inverse_radii = self._tensor(1.0 / template.radii_m[None, :])
-        self._radial_midpoints = self._tensor(template.radial_midpoints_m)
+        self._radii = self._tensor(static_data.radii_m)
+        self._inverse_radii = self._tensor(1.0 / static_data.radii_m[None, :])
+        self._radial_midpoints = self._tensor(static_data.radial_midpoints_m)
         self._inverse_radial_midpoints = self._tensor(
-            1.0 / template.radial_midpoints_m[None, :]
+            1.0 / static_data.radial_midpoints_m[None, :]
         )
-        self._radial_steps = self._tensor(template.radial_steps_m)
+        self._radial_steps = self._tensor(static_data.radial_steps_m)
         self._radial_center_distances = self._tensor(
-            template.radial_midpoints_m[1:] - template.radial_midpoints_m[:-1]
+            static_data.radial_midpoints_m[1:]
+            - static_data.radial_midpoints_m[:-1]
         )
         self._radial_node_control_lengths = self._tensor(
-            template.radial_node_control_lengths_m
+            static_data.radial_node_control_lengths_m
         )
 
         incident = [[] for _ in owned_vertices]
@@ -484,7 +493,7 @@ class DistributedGeodesicFDTD:
         self._interior_e_edges = self._indices(np.flatnonzero(~et_boundary))
         self._boundary_e_edges = self._indices(np.flatnonzero(et_boundary))
 
-    def _prepare_local_coefficients(self, template: GeodesicFDTD) -> None:
+    def _prepare_local_coefficients(self, static_data: _StaticSimulationData) -> None:
         owned_vertices = self.rank_partition.owned_vertices
         owned_edges = self.rank_partition.owned_edges
 
@@ -493,18 +502,19 @@ class DistributedGeodesicFDTD:
             selected = host if host.shape[0] == 1 else host[indices]
             return self._tensor(selected)
 
-        self._ca_er = rows(template._ca_er, owned_vertices)
-        self._cb_er = rows(template._cb_er, owned_vertices)
-        self._ca_et = rows(template._ca_et, owned_edges)
-        self._cb_et = rows(template._cb_et, owned_edges)
+        ca_er, cb_er, ca_et, cb_et = _host_material_update_coefficients(
+            static_data, self.config
+        )
+        self._ca_er = rows(ca_er, owned_vertices)
+        self._cb_er = rows(cb_er, owned_vertices)
+        self._ca_et = rows(ca_et, owned_edges)
+        self._cb_et = rows(cb_et, owned_edges)
 
-    def _prepare_local_sources(self, template: GeodesicFDTD) -> None:
+    def _prepare_local_sources(self, static_data: _StaticSimulationData) -> None:
         self._source_distribution = None
         self._tangential_source_distribution = None
-        if template._source_distribution is not None:
-            vertices, layers, weights = (
-                np.asarray(value) for value in template._source_distribution
-            )
+        if static_data.source_distribution is not None:
+            vertices, layers, weights = static_data.source_distribution
             selected = self.partition.vertex_owner[vertices] == self.rank
             self._source_distribution = (
                 self._indices(self._vertex_layout.global_to_local[vertices[selected]]),
@@ -514,10 +524,8 @@ class DistributedGeodesicFDTD:
                     self.mesh.dual_cell_solid_angles[vertices[selected]]
                 ),
             )
-        if template._tangential_source_distribution is not None:
-            edges, layers, weights = (
-                np.asarray(value) for value in template._tangential_source_distribution
-            )
+        if static_data.tangential_source_distribution is not None:
+            edges, layers, weights = static_data.tangential_source_distribution
             selected = self.partition.edge_owner[edges] == self.rank
             self._tangential_source_distribution = (
                 self._indices(self._et_layout.global_to_local[edges[selected]]),
@@ -930,20 +938,17 @@ def _layout(global_count: int, owned: np.ndarray, ghost: np.ndarray) -> _EntityL
 class _TorchArrayAdapter:
     """Minimal ADE allocation interface for a rank-local torch device."""
 
-    def __init__(self, torch: Any, dtype: Any, device: Any) -> None:
-        self.torch = torch
-        self.dtype = dtype
-        self.device = device
+    def __init__(self, runtime: _TorchRuntime) -> None:
+        self.runtime = runtime
 
     def asarray(self, values: Any) -> Any:
-        return self.torch.as_tensor(values, dtype=self.dtype, device=self.device)
+        return self.runtime.as_tensor(values)
 
     def zeros(self, shape: tuple[int, ...]) -> Any:
-        return self.torch.zeros(shape, dtype=self.dtype, device=self.device)
+        return self.runtime.zeros(shape)
 
-    @staticmethod
-    def nbytes(values: Any) -> int:
-        return int(values.numel() * values.element_size())
+    def nbytes(self, values: Any) -> int:
+        return self.runtime.nbytes(values)
 
 
 def initialize_torchrun_process_group(backend: str = "nccl") -> Any:

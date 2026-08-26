@@ -1,3 +1,4 @@
+import inspect
 import os
 from pathlib import Path
 
@@ -65,6 +66,63 @@ def _distributed_worker(
             device="cpu" if backend == "gloo" else f"cuda:{rank}",
             dtype="float64",
         )
+        float_tensors = (
+            "er",
+            "et",
+            "hr",
+            "ht",
+            "_face_edge_signs",
+            "_face_primal_edge_angles",
+            "_primal_edge_angles",
+            "_inverse_primal_edge_angles",
+            "_dual_edge_angles",
+            "_inverse_dual_edge_angles",
+            "_inverse_face_solid_angles",
+            "_inverse_dual_cell_solid_angles",
+            "_radii",
+            "_inverse_radii",
+            "_radial_midpoints",
+            "_inverse_radial_midpoints",
+            "_radial_steps",
+            "_radial_center_distances",
+            "_radial_node_control_lengths",
+            "_vertex_edge_metric",
+            "_ca_er",
+            "_cb_er",
+            "_ca_et",
+            "_cb_et",
+        )
+        for name in float_tensors:
+            value = getattr(simulation, name)
+            assert value.device == simulation.device
+            assert value.dtype == simulation.dtype
+        index_tensors = (
+            "_edge_endpoints",
+            "_face_edges",
+            "_edge_left_faces",
+            "_edge_right_faces",
+            "_vertex_edges",
+            "_interior_h_edges",
+            "_boundary_h_edges",
+            "_interior_h_faces",
+            "_boundary_h_faces",
+            "_interior_e_vertices",
+            "_boundary_e_vertices",
+            "_interior_e_edges",
+            "_boundary_e_edges",
+        )
+        for name in index_tensors:
+            value = getattr(simulation, name)
+            assert value.device == simulation.device
+            assert value.dtype == torch.long
+        if simulation._source_distribution is not None:
+            vertices, layers, weights, areas = simulation._source_distribution
+            assert vertices.dtype == layers.dtype == torch.long
+            assert weights.dtype == areas.dtype == simulation.dtype
+            assert all(
+                value.device == simulation.device
+                for value in (vertices, layers, weights, areas)
+            )
         if cuda_graph_chunk_size:
             simulation.enable_cuda_graph(cuda_graph_chunk_size)
             simulation.step(8)
@@ -105,6 +163,14 @@ def _distributed_worker(
         if simulation is not None:
             simulation.close()
         distributed.destroy_process_group()
+
+
+def test_distributed_constructor_does_not_bootstrap_numpy_solver() -> None:
+    source = inspect.getsource(DistributedGeodesicFDTD.__init__)
+
+    assert "GeodesicFDTD(" not in source
+    assert 'backend="numpy"' not in source
+    assert "NumPyBackend" not in source
 
 
 def test_distributed_solver_requires_initialized_process_group() -> None:
