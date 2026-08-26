@@ -138,10 +138,24 @@ class _TorchRuntime:
     def empty_like(self, values: Any) -> Any:
         return self.torch.empty_like(values)
 
-    def compile(self, function: Callable[..., Any]) -> Callable[..., Any]:
-        """Compile a static-shape tensor function with TorchInductor."""
+    def compile(
+        self,
+        function: Callable[..., Any],
+        *,
+        backend: str | None = None,
+    ) -> Callable[..., Any]:
+        """Compile a static-shape tensor function with the selected backend."""
 
-        return self.torch.compile(function, fullgraph=True, dynamic=False)
+        if backend is None:
+            return self.torch.compile(
+                function, fullgraph=True, dynamic=False
+            )
+        return self.torch.compile(
+            function,
+            backend=backend,
+            fullgraph=True,
+            dynamic=False,
+        )
 
     def synchronize(self) -> None:
         """Wait for queued work on asynchronous accelerator devices."""

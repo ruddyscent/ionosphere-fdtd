@@ -12,6 +12,16 @@ from .constants import MU_0
 
 
 @dataclass(frozen=True, slots=True)
+class SurfaceImpedanceCoefficientTensors:
+    """Tensor-native coefficients for the lower-boundary ADE."""
+
+    decay: Any
+    drive: Any
+    history_weights: Any
+    scale: Any
+
+
+@dataclass(frozen=True, slots=True)
 class ConductiveHalfSpaceSurface:
     r"""Positive-real approximation of a conductive half-space impedance.
 
@@ -265,9 +275,13 @@ class SurfaceImpedanceADE:
             h_new + h_old
         )[:, None] * self._drive[None, :]
         if rows is None:
-            self.memory[:] = updated_memory
+            self.memory = updated_memory
+        elif hasattr(self.memory, "index_copy"):
+            self.memory = self.memory.index_copy(0, rows, updated_memory)
         else:
-            self.memory[rows] = updated_memory
+            next_memory = self.memory.copy()
+            next_memory[rows] = updated_memory
+            self.memory = next_memory
 
     @property
     def state_bytes(self) -> int:

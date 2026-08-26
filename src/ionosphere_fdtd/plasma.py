@@ -30,6 +30,26 @@ MESH_PLASMA_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
+class PlasmaSpeciesCoefficientTensors:
+    """Tensor-native exact-update coefficients for one plasma species."""
+
+    decay: Any
+    cosine: Any
+    sine: Any
+    drive_parallel: Any
+    drive_real: Any
+    drive_imag: Any
+
+
+@dataclass(frozen=True, slots=True)
+class PlasmaCoefficientTensors:
+    """Tensor-native magnetic direction and per-species ADE coefficients."""
+
+    magnetic_direction: Any
+    species: tuple[PlasmaSpeciesCoefficientTensors, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ColdPlasmaSpecies:
     """One charged fluid sampled at mesh-face/radial-cell centers."""
 
@@ -418,6 +438,7 @@ class MagnetizedPlasmaADE:
         electric_parallel = (electric_v_m * b).sum(axis=2)[..., None] * b
         electric_perpendicular = electric_v_m - electric_parallel
         electric_cross = _cross_with_b(electric_perpendicular, b, self.backend)
+        next_current_density = []
         for index, coefficients in enumerate(self._coefficients):
             decay, cosine, sine, drive_parallel, drive_real, drive_imag = (
                 coefficients
@@ -437,8 +458,9 @@ class MagnetizedPlasmaADE:
                 + drive_real[..., None] * electric_perpendicular
                 + drive_imag[..., None] * electric_cross
             )
-            self.current_density[index][:] = updated
-            total += updated
+            next_current_density.append(updated)
+            total = total + updated
+        self.current_density = next_current_density
         return total
 
     @property

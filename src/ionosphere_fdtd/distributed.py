@@ -621,6 +621,7 @@ class DistributedGeodesicFDTD:
             self.time_step_s / MU_0
         )
         if self._surface_impedance_ade is not None:
+            stable_memory = self._surface_impedance_ade.memory
             boundary_metric = (
                 self.radial_midpoints_m[0] / self.radii_m[0]
                 if self.config.geometry_mode == "full-spherical"
@@ -636,6 +637,10 @@ class DistributedGeodesicFDTD:
                     rows=rows,
                 )
             )
+            # CUDA Graph replay requires the captured ADE storage address to
+            # remain stable even though the shared ADE transition is functional.
+            stable_memory.copy_(self._surface_impedance_ade.memory)
+            self._surface_impedance_ade.memory = stable_memory
 
     def _update_magnetic_faces(self, rows: Any) -> None:
         edge_values = (

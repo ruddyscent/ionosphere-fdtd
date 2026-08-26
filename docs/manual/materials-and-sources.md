@@ -93,10 +93,51 @@ source of published material arrays and the automatic CFL estimate. A
 tensor-native relative permittivity does not dynamically change `time_step_s`;
 choose a static material envelope or explicit stable time step that covers the
 entire trainable range. Mesh classification, interpolation, topology, time-step
-selection, plasma and surface-impedance ADE parameters are not differentiable
-through this interface. Checkpoints store field state and static run metadata,
-not a live autograd graph, so recreate trainable tensors before resuming an
+selection, and optional-physics parameters are not differentiable through the
+material interface. Checkpoints store field state and static run metadata, not
+a live autograd graph, so recreate trainable tensors before resuming an
 optimization.
+
+## Differentiable optional-physics coefficients
+
+The PyTorch backend can optimize discrete surface-impedance and magnetized-
+plasma ADE coefficients. Pass a static `surface_impedance` or `plasma` model as
+usual and override the coefficients used by the recurrence with
+`surface_impedance_tensors=SurfaceImpedanceCoefficientTensors(...)` or
+`plasma_tensors=PlasmaCoefficientTensors(...)`. Existing tensors are normalized
+with graph-preserving `.to(device, dtype)` operations.
+
+| Container field | Shape |
+|---|---|
+| Surface `decay`, `drive`, `history_weights` | `(surface_impedance.terms,)` |
+| Surface `scale` | `(mesh.n_edges,)` |
+| Plasma `magnetic_direction` | `(mesh.n_faces, radial_cells, 3)` |
+| Each plasma species coefficient | `(mesh.n_faces, radial_cells)` |
+
+A plasma container holds one `PlasmaSpeciesCoefficientTensors` per static model
+species. Every species provides `decay`, `cosine`, `sine`, `drive_parallel`,
+`drive_real`, and `drive_imag` tensors with the shape shown above.
+
+These inputs own the differentiable discrete recurrence. Raw conductivity,
+magnetic-field, density, collision-frequency, file-loading, and geographic
+interpolation paths remain static preprocessing. An optimizer that changes a
+coefficient must keep it inside the constructor's documented finite and
+stability bounds. The static model remains the source of physical metadata,
+checkpoint reconstruction, and the automatic CFL estimate, so choose it to
+cover the trainable coefficient range.
+
+Both eager execution and `compile_step=True` propagate gradients through every
+functional ADE state transition. On CPU, gradient-carrying optional-physics
+calls use the full-graph AOTAutograd backend; non-gradient execution retains the
+TorchInductor fast path. The CPU float64 regression uses four steps and checks
+surface `scale` gradients with `rtol=1e-10, atol=1e-10` and plasma `decay`
+gradients with `rtol=2e-6, atol=3e-6`. Forward fields and ADE state use
+`rtol=3e-13, atol=1e-22`.
+
+Checkpoint files contain detached numeric field and ADE state values. They do
+not serialize the autograd graph or tensor coefficient overrides. A restored
+simulation therefore resumes the exact ADE state but requires new trainable
+coefficient tensors before continuing an optimization.
 
 ## Layered geographic material
 

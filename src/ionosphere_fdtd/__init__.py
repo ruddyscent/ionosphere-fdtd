@@ -47,7 +47,12 @@ from .partition import (
     partition_surface_mesh,
     validate_surface_partition,
 )
-from .plasma import ColdPlasmaSpecies, MeshPlasmaModel
+from .plasma import (
+    ColdPlasmaSpecies,
+    MeshPlasmaModel,
+    PlasmaCoefficientTensors,
+    PlasmaSpeciesCoefficientTensors,
+)
 from .radial_grid import (
     RadialGridValidation,
     RadialRefinementRegion,
@@ -56,7 +61,10 @@ from .radial_grid import (
 )
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, TangentialGaussianCurrent
-from .surface_impedance import ConductiveHalfSpaceSurface
+from .surface_impedance import (
+    ConductiveHalfSpaceSurface,
+    SurfaceImpedanceCoefficientTensors,
+)
 from .visualization import (
     RadialSection,
     Receiver,
@@ -94,6 +102,8 @@ __all__ = [
     "GeodesicMesh",
     "NumPyBackend",
     "PartitionValidation",
+    "PlasmaCoefficientTensors",
+    "PlasmaSpeciesCoefficientTensors",
     "RadialSection",
     "RadialGridValidation",
     "RadialRefinementRegion",
@@ -107,6 +117,7 @@ __all__ = [
     "SurfacePartition",
     "SpatialEarthIonosphereMaterial",
     "TorchBackend",
+    "SurfaceImpedanceCoefficientTensors",
     "TorchDistributedHaloExchange",
     "VariableProvenance",
     "animate_surface_field",

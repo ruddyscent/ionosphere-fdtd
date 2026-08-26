@@ -20,12 +20,18 @@ from .materials import (
     conservative_anomaly_fractions,
 )
 from .mesh import GeodesicMesh, build_geodesic_mesh
-from .plasma import GeodesicPlasmaCoupler, MeshPlasmaModel
+from .plasma import (
+    GeodesicPlasmaCoupler,
+    MeshPlasmaModel,
+    PlasmaCoefficientTensors,
+    PlasmaSpeciesCoefficientTensors,
+)
 from .radial_grid import validate_radial_grid
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .surface_impedance import (
     ConductiveHalfSpaceSurface,
     SurfaceImpedanceADE,
+    SurfaceImpedanceCoefficientTensors,
 )
 
 
@@ -200,6 +206,10 @@ class GeodesicFDTD:
         material_tensors: (
             SampledMaterialTensors | MaterialUpdateCoefficientTensors | None
         ) = None,
+        surface_impedance_tensors: (
+            SurfaceImpedanceCoefficientTensors | None
+        ) = None,
+        plasma_tensors: PlasmaCoefficientTensors | None = None,
     ) -> None:
         if (
             isinstance(compile_chunk_size, bool)
@@ -252,6 +262,8 @@ class GeodesicFDTD:
         self.surface_impedance = surface_impedance
         self.material_tensors = material_tensors
         self.plasma = plasma
+        self.surface_impedance_tensors = surface_impedance_tensors
+        self.plasma_tensors = plasma_tensors
         if self.config.radial_boundary_condition == "surface-impedance":
             if surface_impedance is None:
                 raise ValueError(
@@ -349,6 +361,7 @@ class GeodesicFDTD:
         )
 
         self._prepare_geometry()
+        self._prepare_optional_physics_coefficients()
         self._prepare_material_coefficients()
         self._source_distribution = None
         self._tangential_source_distribution = None
@@ -371,6 +384,129 @@ class GeodesicFDTD:
         self.compiled = compile_step
         self._initialize_field_stepper(compile_step)
 
+    def _prepare_optional_physics_coefficients(self) -> None:
+        """Validate tensor-native ADE coefficients and preserve their graphs."""
+
+        if (
+            self.surface_impedance_tensors is not None
+            or self.plasma_tensors is not None
+        ) and self.backend.name != "torch":
+            raise ValueError(
+                "optional-physics tensor coefficients require backend='torch'"
+            )
+
+        if self.surface_impedance_tensors is not None:
+            if self._surface_impedance_ade is None:
+                raise ValueError(
+                    "surface_impedance_tensors requires a surface impedance model"
+                )
+            tensors = self.surface_impedance_tensors
+            if not isinstance(tensors, SurfaceImpedanceCoefficientTensors):
+                raise TypeError(
+                    "surface_impedance_tensors must be "
+                    "SurfaceImpedanceCoefficientTensors"
+                )
+            terms_shape = (self.surface_impedance.terms,)
+            scale_shape = (self.mesh.n_edges,)
+            decay = self._validated_physics_tensor(
+                tensors.decay,
+                terms_shape,
+                "surface_impedance_tensors.decay",
+                minimum=-1.0,
+                maximum=1.0,
+            )
+            drive = self._validated_physics_tensor(
+                tensors.drive,
+                terms_shape,
+                "surface_impedance_tensors.drive",
+                minimum=0.0,
+                maximum=1.0,
+            )
+            history_weights = self._validated_physics_tensor(
+                tensors.history_weights,
+                terms_shape,
+                "surface_impedance_tensors.history_weights",
+                minimum=0.0,
+                strict_minimum=True,
+            )
+            scale = self._validated_physics_tensor(
+                tensors.scale,
+                scale_shape,
+                "surface_impedance_tensors.scale",
+                minimum=0.0,
+                strict_minimum=True,
+            )
+            self.surface_impedance_tensors = (
+                SurfaceImpedanceCoefficientTensors(
+                    decay, drive, history_weights, scale
+                )
+            )
+            ade = self._surface_impedance_ade
+            ade._decay = decay
+            ade._drive = drive
+            ade._history_weights = history_weights
+            ade._scale = scale
+
+        if self.plasma_tensors is not None:
+            if self._plasma_coupler is None:
+                raise ValueError("plasma_tensors requires a plasma model")
+            tensors = self.plasma_tensors
+            if not isinstance(tensors, PlasmaCoefficientTensors):
+                raise TypeError(
+                    "plasma_tensors must be PlasmaCoefficientTensors"
+                )
+            if not isinstance(tensors.species, tuple):
+                raise TypeError("plasma_tensors.species must be a tuple")
+            ade = self._plasma_coupler.ade
+            if len(tensors.species) != len(ade._coefficients):
+                raise ValueError(
+                    "plasma_tensors.species must match the plasma model species"
+                )
+            vector_shape = tuple(ade._magnetic_direction.shape)
+            coefficient_shape = vector_shape[:2]
+            magnetic_direction = self._validated_physics_tensor(
+                tensors.magnetic_direction,
+                vector_shape,
+                "plasma_tensors.magnetic_direction",
+            )
+            normalized_species = []
+            normalized_coefficients = []
+            rules = (
+                ("decay", 0.0, False, 1.0),
+                ("cosine", -1.0, False, 1.0),
+                ("sine", -1.0, False, 1.0),
+                ("drive_parallel", 0.0, False, None),
+                ("drive_real", None, False, None),
+                ("drive_imag", None, False, None),
+            )
+            for index, species in enumerate(tensors.species):
+                if not isinstance(species, PlasmaSpeciesCoefficientTensors):
+                    raise TypeError(
+                        f"plasma_tensors.species[{index}] must be "
+                        "PlasmaSpeciesCoefficientTensors"
+                    )
+                values = []
+                for name, minimum, strict_minimum, maximum in rules:
+                    values.append(
+                        self._validated_physics_tensor(
+                            getattr(species, name),
+                            coefficient_shape,
+                            f"plasma_tensors.species[{index}].{name}",
+                            minimum=minimum,
+                            strict_minimum=strict_minimum,
+                            maximum=maximum,
+                        )
+                    )
+                normalized_species.append(
+                    PlasmaSpeciesCoefficientTensors(*values)
+                )
+                normalized_coefficients.append(tuple(values))
+            self.plasma_tensors = PlasmaCoefficientTensors(
+                magnetic_direction, tuple(normalized_species)
+            )
+            ade._magnetic_direction = magnetic_direction
+            ade._coefficients = normalized_coefficients
+
     def _initialize_field_stepper(self, compile_step: bool) -> None:
         """Configure the existing NumPy or functional PyTorch recurrence."""
 
@@ -390,16 +526,26 @@ class GeodesicFDTD:
         from ._torch_step import (
             FieldState,
             FieldStepParameters,
+            OptionalPhysicsState,
+            OptionalPhysicsStepParameters,
+            PlasmaSpeciesStepParameters,
+            PlasmaStepParameters,
+            SurfaceImpedanceStepParameters,
+            _optional_physics_requires_grad,
             advance,
             advance_chunk,
             advance_electric,
             advance_magnetic,
+            advance_optional_physics,
+            advance_optional_physics_chunk,
             lower_surface_gradient_er,
         )
 
         self._field_state_type = FieldState
         self._advance_electric_state = advance_electric
         self._advance_magnetic_state = advance_magnetic
+        self._optional_physics_state_type = OptionalPhysicsState
+        self._optional_physics_requires_grad = _optional_physics_requires_grad
         self._lower_surface_gradient_er = lower_surface_gradient_er
         radial_vertices = radial_layers = radial_weights = None
         if self._source_distribution is not None:
@@ -457,13 +603,84 @@ class GeodesicFDTD:
             tangential_source_layers=tangential_layers,
             tangential_source_weights=tangential_weights,
         )
+        surface_parameters = None
+        if self._surface_impedance_ade is not None:
+            boundary_metric = (
+                self.radial_midpoints_m[0] / self.radii_m[0]
+                if self.config.geometry_mode == "full-spherical"
+                else 1.0
+            )
+            ade = self._surface_impedance_ade
+            surface_parameters = SurfaceImpedanceStepParameters(
+                ade._decay,
+                ade._drive,
+                ade._history_weights,
+                ade._scale,
+                boundary_metric,
+                self._radial_steps[0],
+            )
+        plasma_parameters = None
+        if self._plasma_coupler is not None:
+            coupler = self._plasma_coupler
+            plasma_parameters = PlasmaStepParameters(
+                coupler.ade._magnetic_direction,
+                tuple(
+                    PlasmaSpeciesStepParameters(*coefficients)
+                    for coefficients in coupler.ade._coefficients
+                ),
+                coupler._face_edges,
+                coupler._faces,
+                coupler._reconstruction,
+                coupler._face_centers,
+                coupler._left_faces,
+                coupler._right_faces,
+                coupler._left_tangents,
+                coupler._right_tangents,
+                coupler._vertex_faces,
+                coupler._vertex_face_weights,
+            )
+        self._optional_physics_step_parameters = OptionalPhysicsStepParameters(
+            self._field_step_parameters,
+            surface_parameters,
+            plasma_parameters,
+        )
+        self._has_optional_physics = (
+            surface_parameters is not None or plasma_parameters is not None
+        )
+
         runtime = self.backend._runtime
-        self._tensor_field_step = (
-            runtime.compile(advance) if compile_step else advance
-        )
-        self._tensor_field_chunk = (
-            runtime.compile(advance_chunk) if compile_step else advance_chunk
-        )
+        if self._has_optional_physics:
+            self._tensor_optional_physics_step = (
+                runtime.compile(advance_optional_physics)
+                if compile_step
+                else advance_optional_physics
+            )
+            self._tensor_optional_physics_chunk = (
+                runtime.compile(advance_optional_physics_chunk)
+                if compile_step
+                else advance_optional_physics_chunk
+            )
+            if compile_step and runtime.device.type == "cpu":
+                self._tensor_optional_physics_gradient_step = runtime.compile(
+                    advance_optional_physics, backend="aot_eager"
+                )
+                self._tensor_optional_physics_gradient_chunk = runtime.compile(
+                    advance_optional_physics_chunk, backend="aot_eager"
+                )
+            else:
+                self._tensor_optional_physics_gradient_step = (
+                    self._tensor_optional_physics_step
+                )
+                self._tensor_optional_physics_gradient_chunk = (
+                    self._tensor_optional_physics_chunk
+                )
+        else:
+            self._tensor_field_step = (
+                runtime.compile(advance) if compile_step else advance
+            )
+            self._tensor_field_chunk = (
+                runtime.compile(advance_chunk) if compile_step else advance_chunk
+            )
         self._field_step = self._advance_torch_fields
         self._field_chunk = self._advance_torch_field_chunk
 
@@ -977,6 +1194,39 @@ class GeodesicFDTD:
             )
         return tensor
 
+    def _validated_physics_tensor(
+        self,
+        values: Any,
+        expected_shape: tuple[int, ...],
+        name: str,
+        *,
+        minimum: float | None = None,
+        strict_minimum: bool = False,
+        maximum: float | None = None,
+    ) -> Any:
+        """Normalize one floating Torch coefficient without severing its graph."""
+
+        torch = self.backend.torch
+        if not torch.is_tensor(values):
+            raise TypeError(f"{name} must be a PyTorch tensor")
+        if not torch.is_floating_point(values):
+            raise TypeError(f"{name} must have a floating-point dtype")
+        tensor = self.backend.asarray(values)
+        if tuple(tensor.shape) != expected_shape:
+            raise ValueError(f"{name} must have shape {expected_shape}")
+        if not bool(torch.isfinite(tensor).all()):
+            raise ValueError(f"{name} must be finite")
+        if minimum is not None:
+            below_minimum = (
+                tensor <= minimum if strict_minimum else tensor < minimum
+            )
+            if bool(below_minimum.any()):
+                relation = "greater than" if strict_minimum else "at least"
+                raise ValueError(f"{name} must be {relation} {minimum}")
+        if maximum is not None and bool((tensor > maximum).any()):
+            raise ValueError(f"{name} must be at most {maximum}")
+        return tensor
+
     def _torch_exponential_loss_coefficients(
         self, sigma: Any, epsilon: Any
     ) -> tuple[Any, Any]:
@@ -1163,6 +1413,36 @@ class GeodesicFDTD:
 
         self.er, self.et, self.hr, self.ht = state
 
+    def _torch_optional_physics_state(self) -> Any:
+        """Return fields and every ADE state tensor without copying."""
+
+        surface_memory = (
+            self._surface_impedance_ade.memory
+            if self._surface_impedance_ade is not None
+            else None
+        )
+        plasma_current_density = (
+            tuple(self._plasma_coupler.ade.current_density)
+            if self._plasma_coupler is not None
+            else ()
+        )
+        return self._optional_physics_state_type(
+            self._torch_field_state(),
+            surface_memory,
+            plasma_current_density,
+        )
+
+    def _set_torch_optional_physics_state(self, state: Any) -> None:
+        """Replace wrapper field and ADE references after one transition."""
+
+        self._set_torch_field_state(state.fields)
+        if self._surface_impedance_ade is not None:
+            self._surface_impedance_ade.memory = state.surface_memory
+        if self._plasma_coupler is not None:
+            self._plasma_coupler.ade.current_density = list(
+                state.plasma_current_density
+            )
+
     def _torch_lower_boundary_ht(self, state: Any) -> Any | None:
         if self._surface_impedance_ade is None:
             return None
@@ -1191,28 +1471,48 @@ class GeodesicFDTD:
         return radial, tangential
 
     def _advance_torch_fields(self, current_a: Any) -> None:
+        if self._has_optional_physics:
+            optional_state = self._torch_optional_physics_state()
+            stepper = self._tensor_optional_physics_step
+            if self._optional_physics_requires_grad(
+                optional_state,
+                self._optional_physics_step_parameters,
+                current_a,
+            ):
+                stepper = self._tensor_optional_physics_gradient_step
+            state = stepper(
+                optional_state,
+                self._optional_physics_step_parameters,
+                current_a,
+            )
+            self._set_torch_optional_physics_state(state)
+            return
         state = self._torch_field_state()
-        lower_boundary_ht = self._torch_lower_boundary_ht(state)
-        radial_plasma, tangential_plasma = self._torch_plasma_currents(state)
         state = self._tensor_field_step(
             state,
             self._field_step_parameters,
             current_a,
-            lower_boundary_ht,
-            radial_plasma,
-            tangential_plasma,
         )
         self._set_torch_field_state(state)
 
     def _advance_torch_field_chunk(self, currents: Any) -> None:
-        """Advance one bare/source chunk, or sequence optional ADE steps."""
+        """Advance one bare/source or optional-physics functional chunk."""
 
-        if (
-            self._surface_impedance_ade is not None
-            or self._plasma_coupler is not None
-        ):
-            for offset in range(self.compile_chunk_size):
-                self._advance_torch_fields(currents[offset])
+        if self._has_optional_physics:
+            optional_state = self._torch_optional_physics_state()
+            stepper = self._tensor_optional_physics_chunk
+            if self._optional_physics_requires_grad(
+                optional_state,
+                self._optional_physics_step_parameters,
+                currents,
+            ):
+                stepper = self._tensor_optional_physics_gradient_chunk
+            state = stepper(
+                optional_state,
+                self._optional_physics_step_parameters,
+                currents,
+            )
+            self._set_torch_optional_physics_state(state)
             return
         self.er, self.et, self.hr, self.ht = self._tensor_field_chunk(
             self._field_state_type(

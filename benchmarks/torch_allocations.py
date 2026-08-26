@@ -121,12 +121,12 @@ def profile_allocations(
             "TorchBackend.face_circulation",
             "TorchBackend.dual_cell_circulation",
             *(
-                ("SurfaceImpedanceADE.advance_lower_boundary",)
+                ("_torch_step.advance_surface_impedance",)
                 if physics == "surface-impedance"
                 else ()
             ),
             *(
-                ("GeodesicPlasmaCoupler.advance",)
+                ("_torch_step.advance_plasma",)
                 if physics == "plasma"
                 else ()
             ),
