@@ -149,5 +149,7 @@ print(simulation.diagnostics())
 er = simulation.to_numpy(simulation.er)
 ```
 
-`to_numpy()` is the portable boundary between backend-native fields and host
-analysis code.
+`to_numpy()` is an explicit terminal boundary between backend-native fields
+and host analysis code. For PyTorch fields it detaches the tensor from its
+autograd graph, moves it to CPU memory, and returns a NumPy array; do not use
+that exported array to construct a differentiable loss.

@@ -1042,8 +1042,27 @@ class GeodesicFDTD:
 
         return (self.steps - 0.5) * self.time_step_s
 
+    @property
+    def device(self) -> Any:
+        """Return the canonical compute device for this simulation."""
+
+        runtime = getattr(self.backend, "_runtime", None)
+        return runtime.device if runtime is not None else self.backend.device
+
+    @property
+    def dtype(self) -> Any:
+        """Return the canonical compute dtype for this simulation."""
+
+        return self.backend.dtype
+
+    @property
+    def threads(self) -> int | None:
+        """Return the active CPU tensor thread count, when applicable."""
+
+        return self.backend.threads
+
     def to_numpy(self, values: Any) -> NDArray[np.generic]:
-        """Expose values as a host NumPy array for analysis or plotting."""
+        """Detach values at a terminal host analysis or plotting boundary."""
 
         return self.backend.to_numpy(values)
 
