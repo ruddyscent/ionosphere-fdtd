@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -17,6 +18,26 @@ LandClassifier = Callable[[FloatArray], BoolArray]
 ReliefSampler = Callable[[FloatArray], FloatArray]
 ProfileSampler = Callable[[FloatArray], FloatArray]
 VolumeSampler = Callable[[FloatArray, FloatArray], FloatArray]
+
+
+@dataclass(frozen=True, slots=True)
+class SampledMaterialTensors:
+    """Backend-native conductivity and relative-permittivity samples."""
+
+    sigma_er: Any
+    epsilon_r_er: Any
+    sigma_et: Any
+    epsilon_r_et: Any
+
+
+@dataclass(frozen=True, slots=True)
+class MaterialUpdateCoefficientTensors:
+    """Backend-native electric-field update coefficients."""
+
+    ca_er: Any
+    cb_er: Any
+    ca_et: Any
+    cb_et: Any
 
 
 @dataclass(frozen=True, slots=True)

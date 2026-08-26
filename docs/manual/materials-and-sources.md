@@ -20,6 +20,84 @@ sample(directions, altitudes_m, earth_radius_m) -> (sigma, epsilon_r)
 
 and return finite arrays of shape `(directions, altitudes)`.
 
+## Differentiable material parameters
+
+Material lookup and interpolation remain static host-side preprocessing. For
+inverse problems, pass already sampled PyTorch tensors separately with
+`SampledMaterialTensors`; the solver derives the lossy electric update
+coefficients without copying or detaching those tensors:
+
+```python
+import torch
+
+from ionosphere_fdtd import (
+    GeodesicFDTD,
+    SampledMaterialTensors,
+    SimulationConfig,
+)
+
+config = SimulationConfig(subdivision=1, radial_cells=24)
+template = GeodesicFDTD(config)
+
+sigma_er = torch.full(
+    template.sigma_er.shape, 1.0e-8, dtype=torch.float64, requires_grad=True
+)
+epsilon_r_er = torch.full(
+    template.epsilon_r_er.shape, 2.0, dtype=torch.float64, requires_grad=True
+)
+sigma_et = torch.full(
+    template.sigma_et.shape, 1.0e-8, dtype=torch.float64, requires_grad=True
+)
+epsilon_r_et = torch.full(
+    template.epsilon_r_et.shape, 2.0, dtype=torch.float64, requires_grad=True
+)
+
+simulation = GeodesicFDTD(
+    config,
+    backend="torch",
+    device="cpu",
+    dtype="float64",
+    material_tensors=SampledMaterialTensors(
+        sigma_er,
+        epsilon_r_er,
+        sigma_et,
+        epsilon_r_et,
+    ),
+)
+```
+
+The four tensors follow the staggered electric-field supports:
+
+| Tensor | Shape |
+|---|---|
+| `sigma_er`, `epsilon_r_er` | `(mesh.n_vertices, len(radii_m))` |
+| `sigma_et`, `epsilon_r_et` | `(mesh.n_edges, len(radial_midpoints_m))` |
+
+When `compress_uniform_material_coefficients=True`, supply one broadcast row:
+`(1, len(radii_m))` for radial values and
+`(1, len(radial_midpoints_m))` for tangential values. Inputs must be floating
+PyTorch tensors with finite, non-negative conductivity and finite, positive
+relative permittivity. Existing tensors are normalized with `.to(device,
+dtype)`, which preserves their autograd history and returns the same object
+when no conversion is needed.
+
+`MaterialUpdateCoefficientTensors` accepts `ca_er`, `cb_er`, `ca_et`, and
+`cb_et` with the same respective shapes when an optimization already owns the
+discrete update coefficients. Conductive decay coefficients must satisfy
+`-1 < ca <= 1`, and drive coefficients must be positive. Both the exponential
+and trapezoidal loss integrations remain differentiable from receiver losses
+back to the supplied tensors, in eager and compiled Torch execution.
+
+The ordinary `material` model is still sampled on the host and remains the
+source of published material arrays and the automatic CFL estimate. A
+tensor-native relative permittivity does not dynamically change `time_step_s`;
+choose a static material envelope or explicit stable time step that covers the
+entire trainable range. Mesh classification, interpolation, topology, time-step
+selection, plasma and surface-impedance ADE parameters are not differentiable
+through this interface. Checkpoints store field state and static run metadata,
+not a live autograd graph, so recreate trainable tensors before resuming an
+optimization.
+
 ## Layered geographic material
 
 `LayeredEarthIonosphereMaterial` supports land/ocean classification or sampled

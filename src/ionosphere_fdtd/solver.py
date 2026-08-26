@@ -13,6 +13,8 @@ from .backends import ArrayBackend, create_backend
 from .constants import C_0, EARTH_RADIUS_M, EPSILON_0, MU_0
 from .materials import (
     EarthIonosphereMaterial,
+    MaterialUpdateCoefficientTensors,
+    SampledMaterialTensors,
     apply_fractional_cell_anomalies,
     apply_fractional_point_anomalies,
     conservative_anomaly_fractions,
@@ -195,6 +197,9 @@ class GeodesicFDTD:
         compile_step: bool = False,
         compile_chunk_size: int = 8,
         torch_threads: int | None = None,
+        material_tensors: (
+            SampledMaterialTensors | MaterialUpdateCoefficientTensors | None
+        ) = None,
     ) -> None:
         if (
             isinstance(compile_chunk_size, bool)
@@ -245,6 +250,7 @@ class GeodesicFDTD:
         self.material = material or EarthIonosphereMaterial()
         self.source = source
         self.surface_impedance = surface_impedance
+        self.material_tensors = material_tensors
         self.plasma = plasma
         if self.config.radial_boundary_condition == "surface-impedance":
             if surface_impedance is None:
@@ -793,6 +799,10 @@ class GeodesicFDTD:
     def _prepare_material_coefficients(self) -> None:
         """Build lossy electric-field update coefficients at the selected dt."""
 
+        if self.material_tensors is not None:
+            self._prepare_tensor_material_coefficients()
+            return
+
         epsilon_er = EPSILON_0 * self.epsilon_r_er
         epsilon_et = EPSILON_0 * self.epsilon_r_et
         sigma_er = self.sigma_er
@@ -820,6 +830,174 @@ class GeodesicFDTD:
         self._cb_er = self.backend.asarray(cb_er)
         self._ca_et = self.backend.asarray(ca_et)
         self._cb_et = self.backend.asarray(cb_et)
+
+    def _prepare_tensor_material_coefficients(self) -> None:
+        """Validate tensor-native material inputs and retain their graph."""
+
+        if self.backend.name != "torch":
+            raise ValueError("material_tensors requires backend='torch'")
+        er_shape, et_shape = self._material_tensor_shapes()
+        tensors = self.material_tensors
+        if isinstance(tensors, SampledMaterialTensors):
+            sigma_er = self._validated_material_tensor(
+                tensors.sigma_er, er_shape, "sigma_er", minimum=0.0
+            )
+            epsilon_r_er = self._validated_material_tensor(
+                tensors.epsilon_r_er,
+                er_shape,
+                "epsilon_r_er",
+                minimum=0.0,
+                strict_minimum=True,
+            )
+            sigma_et = self._validated_material_tensor(
+                tensors.sigma_et, et_shape, "sigma_et", minimum=0.0
+            )
+            epsilon_r_et = self._validated_material_tensor(
+                tensors.epsilon_r_et,
+                et_shape,
+                "epsilon_r_et",
+                minimum=0.0,
+                strict_minimum=True,
+            )
+            self.material_tensors = SampledMaterialTensors(
+                sigma_er, epsilon_r_er, sigma_et, epsilon_r_et
+            )
+            epsilon_er = EPSILON_0 * epsilon_r_er
+            epsilon_et = EPSILON_0 * epsilon_r_et
+            if self.config.loss_integration == "trapezoidal":
+                loss_er = sigma_er * self.time_step_s / (2.0 * epsilon_er)
+                loss_et = sigma_et * self.time_step_s / (2.0 * epsilon_et)
+                self._ca_er = (1.0 - loss_er) / (1.0 + loss_er)
+                self._cb_er = self.time_step_s / (
+                    epsilon_er * (1.0 + loss_er)
+                )
+                self._ca_et = (1.0 - loss_et) / (1.0 + loss_et)
+                self._cb_et = self.time_step_s / (
+                    epsilon_et * (1.0 + loss_et)
+                )
+            else:
+                self._ca_er, self._cb_er = (
+                    self._torch_exponential_loss_coefficients(
+                        sigma_er, epsilon_er
+                    )
+                )
+                self._ca_et, self._cb_et = (
+                    self._torch_exponential_loss_coefficients(
+                        sigma_et, epsilon_et
+                    )
+                )
+            return
+        if isinstance(tensors, MaterialUpdateCoefficientTensors):
+            ca_er = self._validated_material_tensor(
+                tensors.ca_er,
+                er_shape,
+                "ca_er",
+                minimum=-1.0,
+                strict_minimum=True,
+                maximum=1.0,
+            )
+            cb_er = self._validated_material_tensor(
+                tensors.cb_er,
+                er_shape,
+                "cb_er",
+                minimum=0.0,
+                strict_minimum=True,
+            )
+            ca_et = self._validated_material_tensor(
+                tensors.ca_et,
+                et_shape,
+                "ca_et",
+                minimum=-1.0,
+                strict_minimum=True,
+                maximum=1.0,
+            )
+            cb_et = self._validated_material_tensor(
+                tensors.cb_et,
+                et_shape,
+                "cb_et",
+                minimum=0.0,
+                strict_minimum=True,
+            )
+            self.material_tensors = MaterialUpdateCoefficientTensors(
+                ca_er, cb_er, ca_et, cb_et
+            )
+            self._ca_er, self._cb_er = ca_er, cb_er
+            self._ca_et, self._cb_et = ca_et, cb_et
+            return
+        raise TypeError(
+            "material_tensors must be SampledMaterialTensors or "
+            "MaterialUpdateCoefficientTensors"
+        )
+
+    def _material_tensor_shapes(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Return the accepted staggered shapes for tensor material inputs."""
+
+        if self.config.compress_uniform_material_coefficients:
+            return (1, len(self.radii_m)), (1, len(self.radial_midpoints_m))
+        return (
+            (self.mesh.n_vertices, len(self.radii_m)),
+            (self.mesh.n_edges, len(self.radial_midpoints_m)),
+        )
+
+    def _validated_material_tensor(
+        self,
+        values: Any,
+        expected_shape: tuple[int, int],
+        name: str,
+        *,
+        minimum: float,
+        strict_minimum: bool = False,
+        maximum: float | None = None,
+    ) -> Any:
+        """Normalize one floating Torch tensor without copying it through NumPy."""
+
+        torch = self.backend.torch
+        if not torch.is_tensor(values):
+            raise TypeError(f"material_tensors.{name} must be a PyTorch tensor")
+        if not torch.is_floating_point(values):
+            raise TypeError(
+                f"material_tensors.{name} must have a floating-point dtype"
+            )
+        tensor = self.backend.asarray(values)
+        if tuple(tensor.shape) != expected_shape:
+            raise ValueError(
+                f"material_tensors.{name} must have shape {expected_shape}"
+            )
+        if not bool(torch.isfinite(tensor).all()):
+            raise ValueError(f"material_tensors.{name} must be finite")
+        below_minimum = tensor <= minimum if strict_minimum else tensor < minimum
+        if bool(below_minimum.any()):
+            relation = "greater than" if strict_minimum else "at least"
+            raise ValueError(
+                f"material_tensors.{name} must be {relation} {minimum}"
+            )
+        if maximum is not None and bool((tensor > maximum).any()):
+            raise ValueError(
+                f"material_tensors.{name} must be at most {maximum}"
+            )
+        return tensor
+
+    def _torch_exponential_loss_coefficients(
+        self, sigma: Any, epsilon: Any
+    ) -> tuple[Any, Any]:
+        """Differentiably integrate conductive decay, including zero loss."""
+
+        torch = self.backend.torch
+        rate = sigma * self.time_step_s / epsilon
+        decay = torch.exp(-rate)
+        small = torch.abs(rate) < 1.0e-4
+        series = (
+            1.0
+            - rate / 2.0
+            + rate.square() / 6.0
+            - rate**3 / 24.0
+            + rate**4 / 120.0
+        )
+        safe_rate = torch.where(small, torch.ones_like(rate), rate)
+        regular = -torch.expm1(-safe_rate) / safe_rate
+        phi1 = torch.where(small, series, regular)
+        drive = self.time_step_s / epsilon * phi1
+        return decay, drive
 
     @staticmethod
     def _uniform_radial_profile(
@@ -859,6 +1037,14 @@ class GeodesicFDTD:
             raise ValueError(
                 f"{label} material sampler must return conductivity and permittivity"
             ) from error
+        if any(
+            type(value).__module__.startswith("torch")
+            for value in (sigma_values, epsilon_values)
+        ):
+            raise TypeError(
+                f"{label} returned PyTorch tensors; pass trainable samples via "
+                "material_tensors instead"
+            )
         sigma = np.asarray(sigma_values, dtype=np.float64)
         epsilon_r = np.asarray(epsilon_values, dtype=np.float64)
         if sigma.shape != expected_shape or epsilon_r.shape != expected_shape:
