@@ -363,16 +363,103 @@ class GeodesicFDTD:
         self.time_s = 0.0
         self.steps = 0
         self.compiled = compile_step
-        self._field_step = (
-            self.backend.compile_step(self._advance_fields)
-            if compile_step
-            else self._advance_fields
+        self._initialize_field_stepper(compile_step)
+
+    def _initialize_field_stepper(self, compile_step: bool) -> None:
+        """Configure the existing NumPy or functional PyTorch recurrence."""
+
+        if self.backend.name != "torch":
+            self._field_step = (
+                self.backend.compile_step(self._advance_fields)
+                if compile_step
+                else self._advance_fields
+            )
+            self._field_chunk = (
+                self.backend.compile_step(self._advance_field_chunk)
+                if compile_step
+                else self._advance_field_chunk
+            )
+            return
+
+        from ._torch_step import (
+            FieldState,
+            FieldStepParameters,
+            advance,
+            advance_chunk,
+            advance_electric,
+            advance_magnetic,
+            lower_surface_gradient_er,
         )
-        self._field_chunk = (
-            self.backend.compile_step(self._advance_field_chunk)
-            if compile_step
-            else self._advance_field_chunk
+
+        self._field_state_type = FieldState
+        self._advance_electric_state = advance_electric
+        self._advance_magnetic_state = advance_magnetic
+        self._lower_surface_gradient_er = lower_surface_gradient_er
+        radial_vertices = radial_layers = radial_weights = None
+        if self._source_distribution is not None:
+            radial_vertices, radial_layers, radial_weights = (
+                self._source_distribution
+            )
+        tangential_edges = tangential_layers = tangential_weights = None
+        if self._tangential_source_distribution is not None:
+            tangential_edges, tangential_layers, tangential_weights = (
+                self._tangential_source_distribution
+            )
+        self._field_step_parameters = FieldStepParameters(
+            time_step_over_mu=self.time_step_s / MU_0,
+            full_spherical_geometry=(
+                self.config.geometry_mode == "full-spherical"
+            ),
+            compress_uniform_material_coefficients=(
+                self.config.compress_uniform_material_coefficients
+            ),
+            edges=self.backend.edges,
+            face_edges=self.backend.face_edges,
+            face_edge_signs=self.backend.face_edge_signs,
+            edge_left_faces=self.backend.edge_left_faces,
+            edge_right_faces=self.backend.edge_right_faces,
+            vertex_edges=self.backend.vertex_edges,
+            vertex_edge_signs=self.backend.vertex_edge_signs,
+            primal_edge_angles=self._primal_edge_angles,
+            inverse_primal_edge_angles=self._inverse_primal_edge_angles,
+            dual_edge_angles=self._dual_edge_angles,
+            inverse_dual_edge_angles=self._inverse_dual_edge_angles,
+            inverse_dual_cell_solid_angles=(
+                self._inverse_dual_cell_solid_angles
+            ),
+            inverse_face_solid_angles=self._inverse_face_solid_angles,
+            radii=self._radii,
+            inverse_radii=self._inverse_radii,
+            radial_midpoints=self._radial_midpoints,
+            inverse_radial_midpoints=self._inverse_radial_midpoints,
+            radial_steps=self._radial_steps,
+            radial_node_control_lengths=self._radial_node_control_lengths,
+            radial_center_distances=self._radial_center_distances,
+            ca_er=self._ca_er,
+            cb_er=self._cb_er,
+            ca_et=self._ca_et,
+            cb_et=self._cb_et,
+            radial_source_vertices=radial_vertices,
+            radial_source_layers=radial_layers,
+            radial_source_weights=radial_weights,
+            radial_source_element_length=(
+                self.source.vertical_element_length_m
+                if self._source_distribution is not None
+                else 0.0
+            ),
+            tangential_source_edges=tangential_edges,
+            tangential_source_layers=tangential_layers,
+            tangential_source_weights=tangential_weights,
         )
+        runtime = self.backend._runtime
+        self._tensor_field_step = (
+            runtime.compile(advance) if compile_step else advance
+        )
+        self._tensor_field_chunk = (
+            runtime.compile(advance_chunk) if compile_step else advance_chunk
+        )
+        self._field_step = self._advance_torch_fields
+        self._field_chunk = self._advance_torch_field_chunk
 
     def _estimate_cfl_time_step_limit(self) -> float:
         """Return the conservative lossless CFL limit before the safety factor."""
@@ -864,6 +951,75 @@ class GeodesicFDTD:
         )
         return self.backend.asarray(values)
 
+    def _torch_field_state(self) -> Any:
+        """Return the current fields as a tensor pytree without copying."""
+
+        return self._field_state_type(self.er, self.et, self.hr, self.ht)
+
+    def _set_torch_field_state(self, state: Any) -> None:
+        """Replace wrapper field references after a functional transition."""
+
+        self.er, self.et, self.hr, self.ht = state
+
+    def _torch_lower_boundary_ht(self, state: Any) -> Any | None:
+        if self._surface_impedance_ade is None:
+            return None
+        lower_surface_gradient = self._lower_surface_gradient_er(
+            state, self._field_step_parameters
+        )
+        boundary_metric = (
+            self.radial_midpoints_m[0] / self.radii_m[0]
+            if self.config.geometry_mode == "full-spherical"
+            else 1.0
+        )
+        return self._surface_impedance_ade.advance_lower_boundary(
+            state.ht[:, 0] + 0.0,
+            boundary_metric * state.et[:, 0],
+            lower_surface_gradient,
+            self._radial_steps[0],
+            self.time_step_s,
+        )
+
+    def _torch_plasma_currents(
+        self, state: Any
+    ) -> tuple[Any | None, Any | None]:
+        if self._plasma_coupler is None:
+            return None, None
+        radial, tangential = self._plasma_coupler.advance(state.er, state.et)
+        return radial, tangential
+
+    def _advance_torch_fields(self, current_a: Any) -> None:
+        state = self._torch_field_state()
+        lower_boundary_ht = self._torch_lower_boundary_ht(state)
+        radial_plasma, tangential_plasma = self._torch_plasma_currents(state)
+        state = self._tensor_field_step(
+            state,
+            self._field_step_parameters,
+            current_a,
+            lower_boundary_ht,
+            radial_plasma,
+            tangential_plasma,
+        )
+        self._set_torch_field_state(state)
+
+    def _advance_torch_field_chunk(self, currents: Any) -> None:
+        """Advance one bare/source chunk, or sequence optional ADE steps."""
+
+        if (
+            self._surface_impedance_ade is not None
+            or self._plasma_coupler is not None
+        ):
+            for offset in range(self.compile_chunk_size):
+                self._advance_torch_fields(currents[offset])
+            return
+        self.er, self.et, self.hr, self.ht = self._tensor_field_chunk(
+            self._field_state_type(
+                self.er, self.et, self.hr, self.ht
+            ),
+            self._field_step_parameters,
+            currents,
+        )
+
     def _advance_fields(self, current_a: Any) -> None:
         self._update_magnetic_fields()
         self._update_electric_fields(current_a)
@@ -875,6 +1031,16 @@ class GeodesicFDTD:
             self._advance_fields(currents[offset])
 
     def _update_magnetic_fields(self) -> None:
+        if self.backend.name == "torch":
+            state = self._torch_field_state()
+            state = self._advance_magnetic_state(
+                state,
+                self._field_step_parameters,
+                self._torch_lower_boundary_ht(state),
+            )
+            self._set_torch_field_state(state)
+            return
+
         surface_gradient_er = self.backend.edge_difference(self.er)
         surface_gradient_er *= self._inverse_primal_edge_angles
         surface_gradient_er *= self._inverse_radii
@@ -921,6 +1087,21 @@ class GeodesicFDTD:
         self.hr -= electric_circulation
 
     def _update_electric_fields(self, current_a: Any = 0.0) -> None:
+        if self.backend.name == "torch":
+            state = self._torch_field_state()
+            radial_plasma, tangential_plasma = self._torch_plasma_currents(
+                state
+            )
+            state = self._advance_electric_state(
+                state,
+                self._field_step_parameters,
+                current_a,
+                radial_plasma,
+                tangential_plasma,
+            )
+            self._set_torch_field_state(state)
+            return
+
         plasma_current = (
             self._plasma_coupler.advance(self.er, self.et)
             if self._plasma_coupler is not None
