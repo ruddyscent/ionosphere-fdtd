@@ -678,6 +678,8 @@ def record_radar_traces(
         synchronize_every=synchronize_every,
         sample_every=sample_every,
     )
+    hr = simulation.to_numpy(hr)
+    ht = simulation.to_numpy(ht)
     sample_steps = np.concatenate(
         (
             np.arange(0, steps + 1, sample_every, dtype=np.int64),

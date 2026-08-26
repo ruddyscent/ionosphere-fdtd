@@ -238,6 +238,53 @@ the configured current moment under refinement.
 When a carrier is present and no width is supplied, the half-width defaults to
 $0.5/f$. The solver rejects a carrier at or above the time-step Nyquist limit.
 
+### Differentiable source currents
+
+With the PyTorch backend, `step()`, `record_er_observations()`, and
+`record_h_observations()` accept a one-dimensional `currents` tensor with one
+value per requested step. A tensor already on the simulation device and dtype
+is used directly, so its autograd history is preserved. Observation methods
+return tensors on that same device and do not detach them.
+
+`GaussianCurrent.current_tensor_a()` evaluates the built-in waveform on the
+tensor device. Its `peak_current_a` override is the differentiable waveform
+parameter:
+
+```python
+import torch
+
+peak = torch.tensor(
+    1.0e6,
+    device=simulation.er.device,
+    dtype=simulation.er.dtype,
+    requires_grad=True,
+)
+times = (
+    torch.arange(steps, device=peak.device, dtype=peak.dtype) + 0.5
+) * simulation.time_step_s
+currents = source.current_tensor_a(
+    times,
+    simulation.time_step_s,
+    peak_current_a=peak,
+)
+traces = simulation.record_er_observations(
+    vertex_indices,
+    radial_layers,
+    weights,
+    steps,
+    currents=currents,
+)
+traces.square().mean().backward()
+```
+
+The stored scalar source attributes, geographic location, mesh search,
+interpolation topology, and distribution weights are static in this API.
+Constructing `currents` through other tensor operations also makes any
+upstream tensor parameters differentiable. Use `simulation.to_numpy(traces)`
+only after gradient-based work is complete. Device barriers are opt-in through
+`synchronize_every`; terminal export performs the final synchronization and
+host copy.
+
 ## Tangential Gaussian current
 
 `TangentialGaussianCurrent` projects one or more geographic azimuths onto the

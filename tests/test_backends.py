@@ -255,6 +255,7 @@ def test_cuda_alias_is_pinned_to_construction_device() -> None:
             1,
         )
         assert traces.shape == (2, 1)
+        assert traces.device == torch.device("cuda:1")
     finally:
         torch.cuda.set_device(previous)
 

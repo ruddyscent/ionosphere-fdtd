@@ -469,12 +469,14 @@ def record_er_observations_with_diagnostics(
         raise ValueError("diagnostics_every must be positive")
     if len(labels) != len(vertex_indices):
         raise ValueError("diagnostic labels must match observation rows")
-    initial = simulation.record_er_observations(
-        vertex_indices,
-        radial_layers,
-        weights,
-        0,
-        synchronize_every=synchronize_every,
+    initial = simulation.to_numpy(
+        simulation.record_er_observations(
+            vertex_indices,
+            radial_layers,
+            weights,
+            0,
+            synchronize_every=synchronize_every,
+        )
     ).astype(np.float64, copy=False)
     receiver = dict(zip(labels, initial[0], strict=True))
     recorder.record(receiver)
@@ -483,12 +485,14 @@ def record_er_observations_with_diagnostics(
     while remaining:
         count = min(diagnostics_every, remaining)
         started = time.perf_counter()
-        block = simulation.record_er_observations(
-            vertex_indices,
-            radial_layers,
-            weights,
-            count,
-            synchronize_every=synchronize_every,
+        block = simulation.to_numpy(
+            simulation.record_er_observations(
+                vertex_indices,
+                radial_layers,
+                weights,
+                count,
+                synchronize_every=synchronize_every,
+            )
         ).astype(np.float64, copy=False)
         elapsed = time.perf_counter() - started
         blocks.append(block[1:])

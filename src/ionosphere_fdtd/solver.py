@@ -873,32 +873,29 @@ class GeodesicFDTD:
             raise ValueError(f"{label} relative permittivity must be positive")
         return sigma, epsilon_r
 
-    def step(self, count: int = 1) -> None:
-        """Advance the fields by ``count`` complete leapfrog time steps."""
+    def step(self, count: int = 1, *, currents: Any | None = None) -> None:
+        """Advance fields, optionally using backend-native source currents.
+
+        ``currents`` supplies one current value per step. Existing PyTorch
+        tensors are moved only when their device or dtype differs, preserving
+        their autograd history.
+        """
 
         count = self._validated_count(count, "step count", minimum=0)
+        step_currents = self._source_currents(count, currents=currents)
         if self.compiled and count:
-            currents = self._source_currents(count)
             chunk_steps = count - count % self.compile_chunk_size
             for offset in range(0, chunk_steps, self.compile_chunk_size):
                 self._field_chunk(
-                    currents[offset : offset + self.compile_chunk_size]
+                    step_currents[offset : offset + self.compile_chunk_size]
                 )
             for offset in range(chunk_steps, count):
-                self._field_step(currents[offset])
+                self._field_step(step_currents[offset])
             self.steps += count
             self.time_s = self.steps * self.time_step_s
             return
-        for _ in range(count):
-            current_a = (
-                self.source.current_a(
-                    self.time_s + 0.5 * self.time_step_s,
-                    self.time_step_s,
-                )
-                if self.source is not None
-                else 0.0
-            )
-            self._field_step(current_a)
+        for offset in range(count):
+            self._field_step(step_currents[offset])
             self.steps += 1
             self.time_s = self.steps * self.time_step_s
 
@@ -935,9 +932,28 @@ class GeodesicFDTD:
             torch_threads=torch_threads,
         )
 
-    def _source_currents(self, count: int) -> Any:
+    def _source_currents(
+        self, count: int, *, currents: Any | None = None
+    ) -> Any:
+        if currents is not None:
+            if self.source is None:
+                raise ValueError("source currents require a configured source")
+            values = self.backend.asarray(currents)
+            if values.ndim != 1 or values.shape[0] != count:
+                raise ValueError(f"currents must have shape ({count},)")
+            return values
         if self.source is None:
             return self.backend.zeros((count,))
+        if self.backend.name == "torch":
+            offsets = self.backend.torch.arange(
+                count,
+                dtype=self.backend.dtype,
+                device=self.backend.torch_device,
+            )
+            times_s = (self.steps + offsets + 0.5) * self.time_step_s
+            return self.source.current_tensor_a(
+                times_s, self.time_step_s
+            )
         values = np.fromiter(
             (
                 self.source.current_a(
@@ -1284,23 +1300,26 @@ class GeodesicFDTD:
         weights: NDArray[np.float64],
         steps: int,
         *,
-        synchronize_every: int = 128,
-    ) -> NDArray[np.generic]:
-        """Advance and record weighted ``Er`` observations without host syncs.
+        currents: Any | None = None,
+        synchronize_every: int | None = None,
+    ) -> Any:
+        """Advance and return backend-native weighted ``Er`` observations.
 
         Each row of ``vertex_indices`` and ``weights`` describes one receiver.
         The returned first row is the initial field, followed by one row per
         completed time step.  Keeping the trace buffer on the backend is much
         faster than reading individual MPS or CUDA scalars every step.
+        Pass ``synchronize_every`` to request explicit device barriers.
         """
 
         vertices = self._validated_index_array(vertex_indices, "vertex_indices")
         layers = self._validated_index_array(radial_layers, "radial_layers")
         sample_weights = np.asarray(weights, dtype=np.float64)
         steps = self._validated_count(steps, "step count", minimum=0)
-        synchronize_every = self._validated_count(
-            synchronize_every, "synchronize_every", minimum=1
-        )
+        if synchronize_every is not None:
+            synchronize_every = self._validated_count(
+                synchronize_every, "synchronize_every", minimum=1
+            )
         if vertices.ndim != 2 or sample_weights.shape != vertices.shape:
             raise ValueError("vertex_indices and weights must have matching 2-D shapes")
         if layers.shape != (vertices.shape[0],):
@@ -1324,16 +1343,17 @@ class GeodesicFDTD:
             traces[row] = (selected * backend_weights).sum(axis=1)
 
         sample(0)
-        currents = self._source_currents(steps)
+        step_currents = self._source_currents(steps, currents=currents)
         for offset in range(steps):
-            self._field_step(currents[offset])
+            self._field_step(step_currents[offset])
             self.steps += 1
             self.time_s = self.steps * self.time_step_s
             sample(offset + 1)
-            if (offset + 1) % synchronize_every == 0:
+            if synchronize_every and (offset + 1) % synchronize_every == 0:
                 self.backend.synchronize()
-        self.backend.synchronize()
-        return self.to_numpy(traces)
+        if synchronize_every is not None:
+            self.backend.synchronize()
+        return traces
 
     def record_h_observations(
         self,
@@ -1345,14 +1365,16 @@ class GeodesicFDTD:
         edge_weights: NDArray[np.float64],
         steps: int,
         *,
-        synchronize_every: int = 128,
+        currents: Any | None = None,
+        synchronize_every: int | None = None,
         sample_every: int = 1,
-    ) -> tuple[NDArray[np.generic], NDArray[np.generic]]:
+    ) -> tuple[Any, Any]:
         """Advance while recording weighted radial and tangential H samples.
 
         The initial row is ``H**(-1/2)`` and row ``k`` is ``H**(k-1/2)``.
         Callers must therefore associate these samples with half-step times,
         independently of the integer-step electric-field clock.
+        Pass ``synchronize_every`` to request explicit device barriers.
         """
 
         faces = self._validated_index_array(face_indices, "face_indices")
@@ -1366,9 +1388,10 @@ class GeodesicFDTD:
         )
         tangential_weights = np.asarray(edge_weights, dtype=np.float64)
         steps = self._validated_count(steps, "step count", minimum=0)
-        synchronize_every = self._validated_count(
-            synchronize_every, "synchronize_every", minimum=1
-        )
+        if synchronize_every is not None:
+            synchronize_every = self._validated_count(
+                synchronize_every, "synchronize_every", minimum=1
+            )
         sample_every = self._validated_count(
             sample_every, "sample_every", minimum=1
         )
@@ -1408,6 +1431,7 @@ class GeodesicFDTD:
         sample_steps = np.unique(sample_steps)
         radial_traces = self.backend.zeros((len(sample_steps), faces.shape[0]))
         tangential_traces = self.backend.zeros((len(sample_steps), edges.shape[0]))
+        step_currents = self._source_currents(steps, currents=currents)
 
         def sample(row: int) -> None:
             selected_hr = self.hr[backend_faces, backend_face_layers]
@@ -1420,13 +1444,24 @@ class GeodesicFDTD:
             ).sum(axis=1)
 
         sample(0)
+        previous_step = 0
         for row, target_step in enumerate(sample_steps[1:], start=1):
-            self.step(int(target_step) - self.steps)
+            target = int(target_step)
+            self.step(
+                target - previous_step,
+                currents=(
+                    step_currents[previous_step:target]
+                    if self.source is not None
+                    else None
+                ),
+            )
             sample(row)
-            if int(target_step) % synchronize_every == 0:
+            previous_step = target
+            if synchronize_every and target % synchronize_every == 0:
                 self.backend.synchronize()
-        self.backend.synchronize()
-        return self.to_numpy(radial_traces), self.to_numpy(tangential_traces)
+        if synchronize_every is not None:
+            self.backend.synchronize()
+        return radial_traces, tangential_traces
 
     @property
     def memory_bytes(self) -> int:

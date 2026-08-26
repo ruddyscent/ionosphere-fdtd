@@ -314,12 +314,14 @@ def record_validation_traces(
     layers = np.asarray([item[1] for item in distributions], dtype=np.int64)
     weights = np.stack([item[2] for item in distributions])
     if recorder is None:
-        values = simulation.record_er_observations(
-            vertices,
-            layers,
-            weights,
-            steps,
-            synchronize_every=synchronize_every,
+        values = simulation.to_numpy(
+            simulation.record_er_observations(
+                vertices,
+                layers,
+                weights,
+                steps,
+                synchronize_every=synchronize_every,
+            )
         ).astype(np.float64, copy=False)
     else:
         values = record_er_observations_with_diagnostics(

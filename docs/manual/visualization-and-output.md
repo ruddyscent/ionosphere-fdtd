@@ -89,8 +89,10 @@ radial node for each requested receiver. It does not interpolate to the exact
 geographic coordinate or altitude, and each plotted sample is read as a host
 scalar. This simple path is intended for inspection. For accelerator-resident
 weighted sampling, construct explicit support indices and weights and use
-`record_er_observations()` or `record_h_observations()`; those methods buffer
-traces on the selected backend and copy them after recording.
+`record_er_observations()` or `record_h_observations()`. Those methods return
+backend-native trace buffers without detaching them. Call
+`simulation.to_numpy(traces)` once at the terminal plotting or artifact
+boundary; this is the explicit device synchronization and host-copy boundary.
 
 ## Python plotting API
 

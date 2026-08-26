@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -235,6 +235,50 @@ class GaussianCurrent:
         return combined_vertices, combined_layers, combined_weights
 
     def current_a(self, time_s: float, dt_s: float) -> float:
+        half_width, center = self._waveform_times(dt_s)
+        envelope = np.exp(-((time_s - center) / half_width) ** 2)
+        if self.carrier_frequency_hz:
+            envelope *= np.cos(
+                2.0 * np.pi * self.carrier_frequency_hz * (time_s - center)
+            )
+        return float(self.peak_current_a * envelope)
+
+    def current_tensor_a(
+        self,
+        time_s: Any,
+        dt_s: float,
+        *,
+        peak_current_a: Any | None = None,
+    ) -> Any:
+        """Evaluate the waveform without leaving a PyTorch tensor graph.
+
+        ``time_s`` must be a floating PyTorch tensor. Passing a tensor as
+        ``peak_current_a`` makes the waveform amplitude differentiable; the
+        source geometry and stored scalar metadata remain static simulation
+        inputs.
+        """
+
+        try:
+            import torch
+        except ImportError as error:
+            raise TypeError("time_s must be a PyTorch tensor") from error
+        if not torch.is_tensor(time_s) or not time_s.is_floating_point():
+            raise TypeError("time_s must be a floating PyTorch tensor")
+        half_width, center = self._waveform_times(dt_s)
+        envelope = torch.exp(-((time_s - center) / half_width) ** 2)
+        if self.carrier_frequency_hz:
+            envelope = envelope * torch.cos(
+                2.0
+                * torch.pi
+                * self.carrier_frequency_hz
+                * (time_s - center)
+            )
+        amplitude = self.peak_current_a if peak_current_a is None else peak_current_a
+        if torch.is_tensor(amplitude):
+            amplitude = amplitude.to(device=time_s.device, dtype=time_s.dtype)
+        return amplitude * envelope
+
+    def _waveform_times(self, dt_s: float) -> tuple[float, float]:
         if self.one_over_e_half_width_s is not None:
             half_width = self.one_over_e_half_width_s
         elif self.carrier_frequency_hz:
@@ -248,10 +292,7 @@ class GaussianCurrent:
             if self.center_time_s is not None
             else max(4.0 * half_width, 36.0 * dt_s)
         )
-        envelope = np.exp(-((time_s - center) / half_width) ** 2)
-        if self.carrier_frequency_hz:
-            envelope *= np.cos(2.0 * np.pi * self.carrier_frequency_hz * (time_s - center))
-        return float(self.peak_current_a * envelope)
+        return half_width, center
 
 
 @dataclass(frozen=True, slots=True)
