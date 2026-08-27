@@ -41,7 +41,6 @@ def test_paper_setup_uses_delta_t_pulse_parameters() -> None:
     simulation = create_validation_simulation(
         subdivision=1,
         material_model="uniform",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -110,7 +109,7 @@ def test_reproduction_command_adds_tensorboard_dependency() -> None:
 
     command = _reproduction_command(args)
 
-    assert "uv run --extra tensorboard --extra pytorch" in command
+    assert "uv run --extra tensorboard --extra visualization" in command
     assert "--tensorboard-log-dir /tmp/physics-events" in command
     assert "--diagnostics-every 512" in command
 
@@ -119,7 +118,6 @@ def test_validation_setup_can_retain_native_orientation() -> None:
     simulation = create_validation_simulation(
         subdivision=1,
         material_model="uniform",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         mesh_orientation="native",
@@ -138,7 +136,6 @@ def test_validation_setup_supports_cfl_safe_radial_refinement() -> None:
         radial_cells=80,
         time_step_s=0.5 * PAPER_TIME_STEP_S,
         material_model="uniform",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -155,7 +152,6 @@ def test_equatorial_diagnostic_corridors_are_disjoint_and_symmetric() -> None:
     simulation = create_validation_simulation(
         subdivision=3,
         material_model="uniform",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -179,7 +175,6 @@ def test_validation_setup_accepts_external_mesh() -> None:
     simulation = create_validation_simulation(
         subdivision=1,
         material_model="uniform",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         mesh=mesh,
@@ -201,7 +196,6 @@ def test_short_validation_record_has_four_interpolated_receivers() -> None:
     simulation = create_validation_simulation(
         subdivision=0,
         material_model="uniform",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -418,7 +412,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
         radial_support="point",
         tangential_interface="point",
         tangential_support="point",
-        backend="torch",
+        runtime="torch",
         device="mps",
         dtype="float32",
         compiled=True,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .backends import BackendUnavailableError
+from ._torch_runtime import BackendUnavailableError
 from .checkpoint import CheckpointError
 from .cli_common import DefaultsHelpFormatter, add_version_argument
 from .cli_config import (
@@ -14,6 +14,7 @@ from .cli_config import (
     clear_explicit_append_defaults,
     explicit_subcommand,
     load_toml_from_argv,
+    reject_legacy_backend_argument,
     subparser,
     table,
     validate_nested_tables,
@@ -50,21 +51,15 @@ def _parser() -> argparse.ArgumentParser:
         help="load model and fields from an NPZ checkpoint",
     )
     parser.add_argument(
-        "--backend",
-        choices=("numpy", "torch"),
-        default="numpy",
-        help="array implementation",
-    )
-    parser.add_argument(
         "--device",
-        default="auto",
-        help="compute device: auto, cpu, mps, cuda, cuda:N, or gpu",
+        default="cpu",
+        help="PyTorch device: cpu, auto, mps, cuda, cuda:N, or gpu",
     )
     parser.add_argument(
         "--dtype",
         choices=("auto", "float32", "float64"),
-        default="auto",
-        help="field precision; auto selects the backend default",
+        default="float64",
+        help="PyTorch field precision",
     )
     parser.add_argument(
         "--torch-compile",
@@ -223,6 +218,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    reject_legacy_backend_argument(argv)
     parser = _parser()
     _, document = load_toml_from_argv(argv)
     validate_root_sections(document, allowed={"ionosphere", "visualization"})
@@ -261,7 +257,6 @@ def main(argv: list[str] | None = None) -> int:
         if args.resume is not None:
             simulation = GeodesicFDTD.load_checkpoint(
                 args.resume,
-                backend=args.backend,
                 device=args.device,
                 dtype=None if args.dtype == "auto" else args.dtype,
                 compile_step=args.torch_compile,
@@ -279,7 +274,6 @@ def main(argv: list[str] | None = None) -> int:
                     peak_current_a=args.source_current,
                     carrier_frequency_hz=args.source_frequency,
                 ),
-                backend=args.backend,
                 device=args.device,
                 dtype=args.dtype,
                 compile_step=args.torch_compile,
@@ -289,13 +283,11 @@ def main(argv: list[str] | None = None) -> int:
     except (BackendUnavailableError, CheckpointError, OSError) as error:
         raise SystemExit(str(error)) from error
     thread_text = (
-        f" threads={simulation.backend.threads}"
-        if simulation.backend.threads is not None
-        else ""
+        f" threads={simulation.threads}" if simulation.threads is not None else ""
     )
     print(
-        f"backend={simulation.backend.name} device={simulation.backend.device} "
-        f"dtype={simulation.backend.dtype_name}{thread_text} "
+        f"runtime={simulation.runtime} device={simulation.device} "
+        f"dtype={simulation.dtype_name}{thread_text} "
         f"compiled={simulation.compiled} "
         f"compile_chunk_size={simulation.compile_chunk_size}"
     )

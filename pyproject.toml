@@ -20,7 +20,7 @@ keywords = [
     "maxwell-equations",
 ]
 requires-python = ">=3.11"
-dependencies = ["numpy>=2.0"]
+dependencies = ["numpy>=2.0", "torch>=2.5"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -39,7 +39,6 @@ Issues = "https://github.com/ruddyscent/ionosphere-fdtd/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
-pytorch = ["torch>=2.5"]
 tensorboard = [
     "tensorboard>=2.18",
     "tensorboardX>=2.6.2",

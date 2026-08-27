@@ -152,10 +152,10 @@ def test_adaptive_mesh_runs_in_solver_without_changing_zero_state() -> None:
 
     simulation.step(4)
 
-    assert not np.any(simulation.er)
-    assert not np.any(simulation.et)
-    assert not np.any(simulation.hr)
-    assert not np.any(simulation.ht)
+    assert not simulation.er.any().item()
+    assert not simulation.et.any().item()
+    assert not simulation.hr.any().item()
+    assert not simulation.ht.any().item()
 
 
 def test_refinement_region_and_builder_reject_invalid_inputs() -> None:

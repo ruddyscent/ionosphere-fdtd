@@ -6,13 +6,7 @@ from .adaptive_mesh import (
     build_adaptive_geodesic_mesh,
     validate_adaptive_mesh,
 )
-from .backends import (
-    ArrayBackend,
-    BackendUnavailableError,
-    NumPyBackend,
-    TorchBackend,
-    create_backend,
-)
+from ._torch_runtime import BackendUnavailableError
 from .checkpoint import CheckpointError
 from .data_artifacts import (
     DataArtifactError,
@@ -81,7 +75,6 @@ from .visualization import (
 
 __all__ = [
     "AdaptiveMeshValidation",
-    "ArrayBackend",
     "BackendUnavailableError",
     "CheckpointError",
     "ColdPlasmaSpecies",
@@ -100,7 +93,6 @@ __all__ = [
     "TangentialGaussianCurrent",
     "GeodesicFDTD",
     "GeodesicMesh",
-    "NumPyBackend",
     "PartitionValidation",
     "PlasmaCoefficientTensors",
     "PlasmaSpeciesCoefficientTensors",
@@ -116,7 +108,6 @@ __all__ = [
     "SphericalAnomaly",
     "SurfacePartition",
     "SpatialEarthIonosphereMaterial",
-    "TorchBackend",
     "SurfaceImpedanceCoefficientTensors",
     "TorchDistributedHaloExchange",
     "VariableProvenance",
@@ -125,7 +116,6 @@ __all__ = [
     "build_geodesic_mesh_from_topology",
     "build_adaptive_geodesic_mesh",
     "build_refined_radial_grid",
-    "create_backend",
     "initialize_torchrun_process_group",
     "plot_mesh_3d",
     "partition_surface_mesh",

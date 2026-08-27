@@ -96,14 +96,13 @@ def save_checkpoint(simulation: Any, path: str | Path) -> Path:
 def load_checkpoint(
     path: str | Path,
     *,
-    backend: str = "numpy",
-    device: str = "auto",
+    device: str = "cpu",
     dtype: str | None = None,
     compile_step: bool = False,
     compile_chunk_size: int = 8,
     torch_threads: int | None = None,
 ) -> Any:
-    """Restore a checkpoint, optionally on a different backend or device."""
+    """Restore portable arrays on the selected PyTorch device and dtype."""
 
     from .solver import GeodesicFDTD, SimulationConfig
 
@@ -248,7 +247,6 @@ def load_checkpoint(
         surface_impedance=surface_impedance,
         plasma=plasma,
         mesh=mesh,
-        backend=backend,
         device=device,
         dtype=selected_dtype,
         compile_step=compile_step,
@@ -270,7 +268,7 @@ def load_checkpoint(
             raise CheckpointError(f"checkpoint field {name} must be floating point")
         if not np.all(np.isfinite(values)):
             raise CheckpointError(f"checkpoint field {name} contains non-finite values")
-        setattr(simulation, name, simulation.backend.asarray(values))
+        setattr(simulation, name, simulation._runtime.as_tensor(values))
     if simulation._surface_impedance_ade is None:
         if surface_impedance_memory.shape != (0, 0):
             raise CheckpointError(
@@ -288,7 +286,7 @@ def load_checkpoint(
             or not np.all(np.isfinite(surface_impedance_memory))
         ):
             raise CheckpointError("checkpoint surface impedance state is invalid")
-        simulation._surface_impedance_ade.memory = simulation.backend.asarray(
+        simulation._surface_impedance_ade.memory = simulation._runtime.as_tensor(
             surface_impedance_memory
         )
     if simulation._plasma_coupler is not None:
@@ -309,7 +307,7 @@ def load_checkpoint(
                 raise CheckpointError(
                     f"checkpoint plasma current {index} is invalid"
                 )
-            expected_currents[index] = simulation.backend.asarray(saved)
+            expected_currents[index] = simulation._runtime.as_tensor(saved)
 
     steps = metadata["state"]["steps"]
     if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
@@ -372,9 +370,9 @@ def _metadata(simulation: Any) -> dict[str, Any]:
             "time_step_s": simulation.time_step_s,
         },
         "runtime": {
-            "backend": simulation.backend.name,
-            "device": simulation.backend.device,
-            "dtype": simulation.backend.dtype_name,
+            "kind": simulation.runtime,
+            "device": str(simulation.device),
+            "dtype": simulation.dtype_name,
             "compiled": simulation.compiled,
             "compile_chunk_size": simulation.compile_chunk_size,
         },

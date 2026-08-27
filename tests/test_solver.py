@@ -46,10 +46,10 @@ def test_simulation_config_rejects_nonfinite_and_inconsistent_geometry() -> None
 def test_zero_fields_are_stationary() -> None:
     simulation = GeodesicFDTD(config=small_config())
     simulation.step(3)
-    assert not np.any(simulation.er)
-    assert not np.any(simulation.et)
-    assert not np.any(simulation.hr)
-    assert not np.any(simulation.ht)
+    assert not np.any(simulation.to_numpy(simulation.er))
+    assert not np.any(simulation.to_numpy(simulation.et))
+    assert not np.any(simulation.to_numpy(simulation.hr))
+    assert not np.any(simulation.to_numpy(simulation.ht))
 
 
 def test_solver_accepts_custom_closed_topology() -> None:
@@ -63,10 +63,10 @@ def test_solver_accepts_custom_closed_topology() -> None:
     simulation.step(3)
 
     assert simulation.mesh.topology_kind == "custom"
-    assert not np.any(simulation.er)
-    assert not np.any(simulation.et)
-    assert not np.any(simulation.hr)
-    assert not np.any(simulation.ht)
+    assert not np.any(simulation.to_numpy(simulation.er))
+    assert not np.any(simulation.to_numpy(simulation.et))
+    assert not np.any(simulation.to_numpy(simulation.hr))
+    assert not np.any(simulation.to_numpy(simulation.ht))
 
 
 def test_memory_diagnostics_distinguish_fields_from_persistent_arrays() -> None:
@@ -74,10 +74,10 @@ def test_memory_diagnostics_distinguish_fields_from_persistent_arrays() -> None:
     diagnostics = simulation.diagnostics()
 
     assert diagnostics["field_memory_bytes"] == simulation.memory_bytes
-    assert diagnostics["persistent_backend_bytes"] == (
-        simulation.persistent_backend_bytes
+    assert diagnostics["persistent_runtime_bytes"] == (
+        simulation.persistent_runtime_bytes
     )
-    assert simulation.persistent_backend_bytes > simulation.memory_bytes
+    assert simulation.persistent_runtime_bytes > simulation.memory_bytes
 
 
 def test_gaussian_source_launches_finite_fields() -> None:
@@ -85,10 +85,10 @@ def test_gaussian_source_launches_finite_fields() -> None:
         config=small_config(), source=GaussianCurrent(peak_current_a=1.0e6)
     )
     simulation.step(80)
-    assert np.isfinite(simulation.er).all()
-    assert np.isfinite(simulation.ht).all()
-    assert np.max(np.abs(simulation.er)) > 0.0
-    assert np.max(np.abs(simulation.ht)) > 0.0
+    assert np.isfinite(simulation.to_numpy(simulation.er)).all()
+    assert np.isfinite(simulation.to_numpy(simulation.ht)).all()
+    assert np.max(np.abs(simulation.to_numpy(simulation.er))) > 0.0
+    assert np.max(np.abs(simulation.to_numpy(simulation.ht))) > 0.0
     assert simulation.time_s == pytest.approx(80 * simulation.time_step_s)
 
 
@@ -220,7 +220,7 @@ def test_vertical_source_current_moment_is_radial_grid_independent(
         / simulation._cb_er[vertices, layers]
     )
     represented_moment = np.sum(
-        current_density
+        simulation.to_numpy(current_density)
         * dual_areas
         * simulation.radial_node_control_lengths_m[layers]
     )
@@ -261,7 +261,7 @@ def test_vertical_source_current_moment_is_preserved_on_nonuniform_grid() -> Non
         / simulation._cb_er[vertices, layers]
     )
     represented_moment = np.sum(
-        current_density
+        simulation.to_numpy(current_density)
         * dual_areas
         * simulation.radial_node_control_lengths_m[layers]
     )
@@ -522,7 +522,7 @@ def test_nonuniform_radial_grid_advances() -> None:
     )
     simulation.step(5)
     assert np.allclose(simulation.altitudes_m, altitudes)
-    assert np.isfinite(simulation.er).all()
+    assert np.isfinite(simulation.to_numpy(simulation.er)).all()
 
 
 def test_custom_radial_grid_rejects_unsafe_spacing_jump() -> None:
@@ -559,7 +559,7 @@ def test_smooth_nonuniform_radial_derivative_converges_at_second_order() -> None
             )
         )
         midpoints = simulation.radial_midpoint_altitudes_m
-        simulation.et[0] = midpoints**2
+        simulation.et[0].copy_(simulation._runtime.as_tensor(midpoints**2))
         derivative = simulation.to_numpy(simulation._radial_derivative_et())[0]
         exact = 2.0 * altitudes[1:-1]
         errors.append(float(np.max(np.abs(derivative[1:-1] - exact))))
@@ -743,15 +743,15 @@ def test_loss_coefficient_damps_uncoupled_radial_field() -> None:
     material = EarthIonosphereMaterial(lithosphere_conductivity_s_m=1.0e-2)
     simulation = GeodesicFDTD(config=small_config(), material=material)
     simulation.er[:, 0] = 1.0
-    expected = simulation._ca_er[:, 0].copy()
+    expected = simulation.to_numpy(simulation._ca_er[:, 0]).copy()
     simulation.step()
-    assert np.allclose(simulation.er[:, 0], expected)
+    assert np.allclose(simulation.to_numpy(simulation.er[:, 0]), expected)
 
 
 def test_radial_pec_ghost_cells_give_the_expected_one_sided_curl() -> None:
     simulation = GeodesicFDTD(config=small_config(geometry_mode="thin-shell"))
     profile = np.arange(1, simulation.et.shape[1] + 1, dtype=np.float64)
-    simulation.et[0] = profile
+    simulation.et[0].copy_(simulation._runtime.as_tensor(profile))
 
     expected_derivative = np.empty(simulation.ht.shape[1])
     expected_derivative[0] = 2.0 * profile[0] / simulation.radial_steps_m[0]
@@ -762,7 +762,7 @@ def test_radial_pec_ghost_cells_give_the_expected_one_sided_curl() -> None:
     simulation._update_magnetic_fields()
 
     np.testing.assert_allclose(
-        simulation.ht[0],
+        simulation.to_numpy(simulation.ht[0]),
         -simulation.time_step_s / MU_0 * expected_derivative,
         rtol=2.0e-16,
         atol=0.0,

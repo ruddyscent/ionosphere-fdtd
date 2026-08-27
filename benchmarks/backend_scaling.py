@@ -1,4 +1,4 @@
-"""Measure backend performance across production mesh and radial sizes."""
+"""Measure PyTorch device performance across production mesh and radial sizes."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import numpy as np
 from benchmarks.backend_matrix import _measure
 
 
-IMPLEMENTATIONS = ("numpy", "torch-cpu", "cuda", "mps")
+IMPLEMENTATIONS = ("torch-cpu", "cuda", "mps")
 MODES = ("eager", "compiled")
 
 
@@ -36,16 +36,14 @@ def benchmark_cases(
         for radial in radial_cells:
             for dtype in dtypes:
                 for implementation in implementations:
-                    backend, device = _backend_device(implementation)
-                    selected_modes = ("eager",) if backend == "numpy" else modes
-                    for mode in selected_modes:
+                    device = _device(implementation)
+                    for mode in modes:
                         cases.append(
                             {
                                 "subdivision": subdivision,
                                 "radial_cells": radial,
                                 "dtype": dtype,
                                 "implementation": implementation,
-                                "backend": backend,
                                 "device": device,
                                 "mode": mode,
                             }
@@ -53,13 +51,11 @@ def benchmark_cases(
     return cases
 
 
-def _backend_device(implementation: str) -> tuple[str, str]:
-    if implementation == "numpy":
-        return "numpy", "cpu"
+def _device(implementation: str) -> str:
     if implementation == "torch-cpu":
-        return "torch", "cpu"
+        return "cpu"
     if implementation in {"cuda", "mps"}:
-        return "torch", implementation
+        return implementation
     raise ValueError(f"unknown implementation: {implementation}")
 
 
@@ -72,7 +68,6 @@ def _case_key(case: dict[str, Any]) -> tuple[Any, ...]:
 
 def _worker_result(args: argparse.Namespace) -> dict[str, Any]:
     result = _measure(
-        args.backend,
         args.device,
         subdivision=args.subdivision,
         radial_cells=args.radial_cells,
@@ -129,8 +124,6 @@ def _run_case(
         case["dtype"],
         "--implementation",
         case["implementation"],
-        "--backend",
-        case["backend"],
         "--device",
         case["device"],
         "--mode",
@@ -248,7 +241,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--radial-cells", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--dtype", help=argparse.SUPPRESS)
     parser.add_argument("--implementation", help=argparse.SUPPRESS)
-    parser.add_argument("--backend", help=argparse.SUPPRESS)
     parser.add_argument("--device", help=argparse.SUPPRESS)
     parser.add_argument("--mode", help=argparse.SUPPRESS)
     return parser

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from ionosphere_fdtd.distributed import DistributedGeodesicFDTD
 from ionosphere_fdtd.mesh import build_geodesic_mesh
@@ -21,7 +22,6 @@ def _distributed_worker(
     cuda_graph_chunk_size: int = 0,
     use_surface_impedance: bool = False,
 ) -> None:
-    import torch
     import torch.distributed as distributed
 
     if backend == "nccl":
@@ -174,7 +174,6 @@ def test_distributed_constructor_does_not_bootstrap_numpy_solver() -> None:
 
 
 def test_distributed_solver_requires_initialized_process_group() -> None:
-    pytest.importorskip("torch")
     mesh = build_geodesic_mesh(0)
     partition = partition_surface_mesh(mesh)
     with pytest.raises(RuntimeError, match="initialize torch.distributed"):
@@ -187,7 +186,6 @@ def test_distributed_solver_requires_initialized_process_group() -> None:
 
 
 def test_two_rank_gloo_matches_single_torch_solver(tmp_path: Path) -> None:
-    torch = pytest.importorskip("torch")
     if not torch.distributed.is_available():
         pytest.skip("torch.distributed is unavailable")
     rendezvous = tmp_path / "distributed-init"
@@ -204,7 +202,6 @@ def test_two_rank_gloo_matches_single_torch_solver(tmp_path: Path) -> None:
     reference = GeodesicFDTD(
         config,
         source=GaussianCurrent(peak_current_a=1.0e6),
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -240,7 +237,6 @@ def test_two_rank_gloo_matches_single_torch_solver(tmp_path: Path) -> None:
 
 
 def test_two_rank_nccl_matches_single_torch_solver(tmp_path: Path) -> None:
-    torch = pytest.importorskip("torch")
     if (
         not torch.cuda.is_available()
         or torch.cuda.device_count() < 2
@@ -260,7 +256,6 @@ def test_two_rank_nccl_matches_single_torch_solver(tmp_path: Path) -> None:
     reference = GeodesicFDTD(
         config,
         source=GaussianCurrent(peak_current_a=1.0e6),
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -277,7 +272,6 @@ def test_two_rank_nccl_matches_single_torch_solver(tmp_path: Path) -> None:
 
 
 def test_two_rank_nccl_cuda_graph_matches_single_solver(tmp_path: Path) -> None:
-    torch = pytest.importorskip("torch")
     if (
         not torch.cuda.is_available()
         or torch.cuda.device_count() < 2
@@ -297,7 +291,6 @@ def test_two_rank_nccl_cuda_graph_matches_single_solver(tmp_path: Path) -> None:
     reference = GeodesicFDTD(
         config,
         source=GaussianCurrent(peak_current_a=1.0e6),
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -314,7 +307,6 @@ def test_two_rank_nccl_cuda_graph_matches_single_solver(tmp_path: Path) -> None:
 
 
 def test_two_rank_surface_impedance_matches_single_solver(tmp_path: Path) -> None:
-    torch = pytest.importorskip("torch")
     rendezvous = tmp_path / "surface-init"
     output = tmp_path / "surface-fields.npz"
     torch.multiprocessing.start_processes(
@@ -336,7 +328,6 @@ def test_two_rank_surface_impedance_matches_single_solver(tmp_path: Path) -> Non
         config,
         source=GaussianCurrent(peak_current_a=1.0e6),
         surface_impedance=ConductiveHalfSpaceSurface(1.0 / 50.0),
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -355,7 +346,6 @@ def test_two_rank_surface_impedance_matches_single_solver(tmp_path: Path) -> Non
 def test_two_rank_nccl_graph_preserves_surface_impedance_state(
     tmp_path: Path,
 ) -> None:
-    torch = pytest.importorskip("torch")
     if (
         not torch.cuda.is_available()
         or torch.cuda.device_count() < 2
@@ -383,7 +373,6 @@ def test_two_rank_nccl_graph_preserves_surface_impedance_state(
         config,
         source=GaussianCurrent(peak_current_a=1.0e6),
         surface_impedance=ConductiveHalfSpaceSurface(1.0 / 50.0),
-        backend="torch",
         device="cpu",
         dtype="float64",
     )

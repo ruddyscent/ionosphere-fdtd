@@ -3,7 +3,7 @@ import inspect
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+import torch
 
 from ionosphere_fdtd import (  # noqa: E402
     ConductiveHalfSpaceSurface,
@@ -101,7 +101,7 @@ def _seed_fields(simulation: GeodesicFDTD) -> None:
         values = (
             generator.standard_normal(getattr(simulation, name).shape) * 1.0e-9
         )
-        getattr(simulation, name).copy_(simulation.backend.asarray(values))
+        getattr(simulation, name).copy_(simulation._runtime.as_tensor(values))
 
 
 def _surface_coefficients(
@@ -145,7 +145,6 @@ def _surface_run(compile_step: bool):
     template = GeodesicFDTD(
         _surface_config(),
         surface_impedance=model,
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -153,7 +152,6 @@ def _surface_run(compile_step: bool):
     simulation = GeodesicFDTD(
         _surface_config(),
         surface_impedance=model,
-        backend="torch",
         device="cpu",
         dtype="float64",
         compile_step=compile_step,
@@ -184,7 +182,6 @@ def _plasma_run(compile_step: bool):
         _plasma_config(),
         mesh=mesh,
         plasma=model,
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -193,7 +190,6 @@ def _plasma_run(compile_step: bool):
         _plasma_config(),
         mesh=mesh,
         plasma=model,
-        backend="torch",
         device="cpu",
         dtype="float64",
         compile_step=compile_step,
@@ -368,7 +364,6 @@ def test_checkpoint_detaches_but_preserves_functional_ade_state(
     )
     restored = GeodesicFDTD.load_checkpoint(
         simulation.save_checkpoint(tmp_path / f"{physics}.npz"),
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -393,22 +388,20 @@ def test_optional_tensor_coefficients_validate_model_backend_and_shape() -> None
     template = GeodesicFDTD(
         _surface_config(),
         surface_impedance=surface,
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
     coefficients, _ = _surface_coefficients(template)
 
-    with pytest.raises(ValueError, match="backend='torch'"):
-        GeodesicFDTD(
-            _surface_config(),
-            surface_impedance=surface,
-            surface_impedance_tensors=coefficients,
-        )
+    simulation = GeodesicFDTD(
+        _surface_config(),
+        surface_impedance=surface,
+        surface_impedance_tensors=coefficients,
+    )
+    assert simulation.runtime == "torch"
     with pytest.raises(ValueError, match="requires a surface impedance model"):
         GeodesicFDTD(
             SimulationConfig(subdivision=0, radial_cells=4),
-            backend="torch",
             device="cpu",
             dtype="float64",
             surface_impedance_tensors=coefficients,
@@ -423,7 +416,6 @@ def test_optional_tensor_coefficients_validate_model_backend_and_shape() -> None
         GeodesicFDTD(
             _surface_config(),
             surface_impedance=surface,
-            backend="torch",
             device="cpu",
             dtype="float64",
             surface_impedance_tensors=invalid,
@@ -435,7 +427,6 @@ def test_optional_tensor_dtype_conversion_preserves_graph() -> None:
     template = GeodesicFDTD(
         _surface_config(),
         surface_impedance=surface,
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -450,7 +441,6 @@ def test_optional_tensor_dtype_conversion_preserves_graph() -> None:
     simulation = GeodesicFDTD(
         _surface_config(),
         surface_impedance=surface,
-        backend="torch",
         device="cpu",
         dtype="float64",
         surface_impedance_tensors=coefficients,

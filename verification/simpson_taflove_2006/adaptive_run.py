@@ -74,7 +74,6 @@ def main(argv: list[str] | None = None) -> int:
             subdivision=args.base_subdivision,
             material_model=args.material,
             etopo5_path=args.etopo5_path,
-            backend="torch",
             device=args.device,
             dtype=args.dtype,
             compile_step=True,
@@ -92,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"case={case} target=s{args.target_subdivision} "
             f"faces={mesh.n_faces:,} dt={simulation.time_step_s:.9e}s "
-            f"steps={steps:,} device={simulation.backend.device}",
+            f"steps={steps:,} device={simulation.device}",
             flush=True,
         )
         started = time.perf_counter()

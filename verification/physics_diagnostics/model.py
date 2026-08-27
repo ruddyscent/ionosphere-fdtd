@@ -59,9 +59,9 @@ class PhysicsRecorder(Protocol):
 
 
 class PhysicsDiagnosticSampler:
-    """Compute discrete volume-weighted diagnostics on the active backend.
+    """Compute discrete volume-weighted diagnostics on the active tensor runtime.
 
-    Material arrays are copied to the backend once so checkpoint sampling does
+    Material arrays are copied to the runtime once so checkpoint sampling does
     not transfer complete fields or coefficients to the host. Only scalars and
     radial profiles leave the accelerator.
     """
@@ -73,23 +73,23 @@ class PhysicsDiagnosticSampler:
         horizontal_regions: Mapping[str, HorizontalRegion] | None = None,
     ) -> None:
         self.simulation = simulation
-        backend = simulation.backend
+        runtime = simulation._runtime
         mesh = simulation.mesh
-        self._horizontal_er = backend.asarray(mesh.dual_cell_solid_angles[:, None])
-        self._horizontal_hr = backend.asarray(mesh.face_solid_angles[:, None])
-        self._horizontal_edge = backend.asarray(
+        self._horizontal_er = runtime.as_tensor(mesh.dual_cell_solid_angles[:, None])
+        self._horizontal_hr = runtime.as_tensor(mesh.face_solid_angles[:, None])
+        self._horizontal_edge = runtime.as_tensor(
             (mesh.primal_edge_angles * mesh.dual_edge_angles)[:, None]
         )
-        self._radial_nodes = backend.asarray(
+        self._radial_nodes = runtime.as_tensor(
             simulation.radii_m**2 * simulation.radial_node_control_lengths_m
         )
-        self._radial_cells = backend.asarray(
+        self._radial_cells = runtime.as_tensor(
             simulation.radial_midpoints_m**2 * simulation.radial_steps_m
         )
-        self._epsilon_er = backend.asarray(EPSILON_0 * simulation.epsilon_r_er)
-        self._epsilon_et = backend.asarray(EPSILON_0 * simulation.epsilon_r_et)
-        self._sigma_er = backend.asarray(simulation.sigma_er)
-        self._sigma_et = backend.asarray(simulation.sigma_et)
+        self._epsilon_er = runtime.as_tensor(EPSILON_0 * simulation.epsilon_r_er)
+        self._epsilon_et = runtime.as_tensor(EPSILON_0 * simulation.epsilon_r_et)
+        self._sigma_er = runtime.as_tensor(simulation.sigma_er)
+        self._sigma_et = runtime.as_tensor(simulation.sigma_et)
         self._horizontal_regions: dict[str, tuple[Any, Any, Any]] = {}
         for name, region in (horizontal_regions or {}).items():
             if not name or "/" in name:
@@ -104,9 +104,9 @@ class PhysicsDiagnosticSampler:
                 region.hr_weights, mesh.n_faces, f"{name} Hr"
             )
             self._horizontal_regions[name] = (
-                self._horizontal_er * backend.asarray(er_weights[:, None]),
-                self._horizontal_edge * backend.asarray(edge_weights[:, None]),
-                self._horizontal_hr * backend.asarray(hr_weights[:, None]),
+                self._horizontal_er * runtime.as_tensor(er_weights[:, None]),
+                self._horizontal_edge * runtime.as_tensor(edge_weights[:, None]),
+                self._horizontal_hr * runtime.as_tensor(hr_weights[:, None]),
             )
         diagnostic_arrays = [
             self._horizontal_er,
@@ -124,8 +124,8 @@ class PhysicsDiagnosticSampler:
             for region in self._horizontal_regions.values()
             for array in region
         )
-        self.diagnostic_backend_bytes = sum(
-            backend.nbytes(values)
+        self.diagnostic_runtime_bytes = sum(
+            runtime.nbytes(values)
             for values in diagnostic_arrays
         )
         reference_height = getattr(
@@ -191,7 +191,7 @@ class PhysicsDiagnosticSampler:
             ("ht", simulation.ht),
         ):
             scalars[f"field_rms/{name}"] = self._rms(field)
-            scalars[f"field_max_abs/{name}"] = simulation.backend.max_abs(field)
+            scalars[f"field_max_abs/{name}"] = simulation._runtime.export_max_abs(field)
             scalars[f"field_finite/{name}"] = self._all_finite(field)
         for name, profile in profiles.items():
             scalars[f"energy/{name}_j"] = float(np.sum(profile))
@@ -213,8 +213,8 @@ class PhysicsDiagnosticSampler:
         self._add_region_scalars(scalars, profiles, loss_profiles)
         self._add_horizontal_region_scalars(scalars)
         scalars.update(self._source_scalars())
-        scalars["memory/diagnostic_backend_bytes"] = float(
-            self.diagnostic_backend_bytes
+        scalars["memory/diagnostic_runtime_bytes"] = float(
+            self.diagnostic_runtime_bytes
         )
         scalars["time/electric_s"] = simulation.electric_time_s
         scalars["time/magnetic_s"] = simulation.magnetic_time_s
@@ -245,7 +245,7 @@ class PhysicsDiagnosticSampler:
         values = 0.5 * (epsilon * field * field * horizontal).sum(axis=0)
         values *= radial
         return np.asarray(
-            self.simulation.backend.to_numpy(values), dtype=np.float64
+            self.simulation.to_numpy(values), dtype=np.float64
         )
 
     def _magnetic_energy_profile(
@@ -254,7 +254,7 @@ class PhysicsDiagnosticSampler:
         values = 0.5 * MU_0 * (field * field * horizontal).sum(axis=0)
         values *= radial
         return np.asarray(
-            self.simulation.backend.to_numpy(values), dtype=np.float64
+            self.simulation.to_numpy(values), dtype=np.float64
         )
 
     def _conductive_loss_profile(
@@ -263,20 +263,17 @@ class PhysicsDiagnosticSampler:
         values = (sigma * field * field * horizontal).sum(axis=0)
         values *= radial
         return np.asarray(
-            self.simulation.backend.to_numpy(values), dtype=np.float64
+            self.simulation.to_numpy(values), dtype=np.float64
         )
 
     def _rms(self, field: Any) -> float:
         mean_square = (field * field).mean()
-        return float(np.sqrt(self.simulation.backend.scalar(mean_square)))
+        return float(np.sqrt(self.simulation._runtime.export_scalar(mean_square)))
 
     def _all_finite(self, field: Any) -> float:
-        backend = self.simulation.backend
-        if backend.name == "torch":
-            finite = backend.torch.isfinite(field).all()
-        else:
-            finite = np.isfinite(field).all()
-        return float(bool(backend.scalar(finite)))
+        runtime = self.simulation._runtime
+        finite = runtime.torch.isfinite(field).all()
+        return float(bool(runtime.export_scalar(finite)))
 
     @staticmethod
     def _validated_region_weights(
@@ -437,11 +434,11 @@ class PhysicsDiagnosticSampler:
         return result
 
     def _accelerator_scalars(self) -> dict[str, float]:
-        backend = self.simulation.backend
-        if backend.name != "torch" or backend.torch_device.type != "cuda":
+        runtime = self.simulation._runtime
+        if runtime.device.type != "cuda":
             return {}
-        torch = backend.torch
-        device = backend.torch_device
+        torch = runtime.torch
+        device = runtime.device
         return {
             "memory/cuda_allocated_bytes": float(torch.cuda.memory_allocated(device)),
             "memory/cuda_reserved_bytes": float(torch.cuda.memory_reserved(device)),

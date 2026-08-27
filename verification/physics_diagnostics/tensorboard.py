@@ -39,16 +39,16 @@ class TensorBoardPhysicsRecorder:
         self.metadata = dict(metadata or {})
         self.metadata.update(
             {
-                "backend": simulation.backend.name,
-                "device": simulation.backend.device,
-                "dtype": simulation.backend.dtype_name,
+                "runtime": simulation.runtime,
+                "device": str(simulation.device),
+                "dtype": simulation.dtype_name,
                 "compiled": simulation.compiled,
                 "subdivision": simulation.config.subdivision,
                 "radial_cells": simulation.config.radial_cells,
                 "time_step_s": simulation.time_step_s,
                 "geometry_mode": simulation.config.geometry_mode,
                 "loss_integration": simulation.config.loss_integration,
-                "diagnostic_backend_bytes": self.sampler.diagnostic_backend_bytes,
+                "diagnostic_runtime_bytes": self.sampler.diagnostic_runtime_bytes,
             }
         )
         self.writer.add_text(

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from ionosphere_fdtd.constants import EPSILON_0, MU_0
 from verification.physics_diagnostics import (
@@ -29,11 +30,10 @@ class _SnapshotRecorder:
         return snapshot
 
 
-def _small_simulation(*, backend: str = "numpy", device: str = "cpu"):
+def _small_simulation(*, device: str = "cpu"):
     return create_validation_simulation(
         subdivision=1,
         material_model="uniform",
-        backend=backend,
         device=device,
         dtype="float64",
         compile_step=False,
@@ -42,12 +42,12 @@ def _small_simulation(*, backend: str = "numpy", device: str = "cpu"):
 
 def test_physics_sampler_matches_independent_volume_integrals() -> None:
     simulation = _small_simulation()
-    simulation.er.fill(2.0)
-    simulation.et.fill(3.0)
-    simulation.hr.fill(4.0)
-    simulation.ht.fill(5.0)
+    simulation.er.fill_(2.0)
+    simulation.et.fill_(3.0)
+    simulation.hr.fill_(4.0)
+    simulation.ht.fill_(5.0)
     fields_before = tuple(
-        values.copy()
+        values.clone()
         for values in (simulation.er, simulation.et, simulation.hr, simulation.ht)
     )
 
@@ -86,15 +86,15 @@ def test_physics_sampler_matches_independent_volume_integrals() -> None:
         )[None, :]
     )
     expected_er = 0.5 * np.sum(
-        EPSILON_0 * simulation.epsilon_r_er * 2.0**2 * node_volume
+        EPSILON_0 * simulation.to_numpy(simulation.epsilon_r_er) * 2.0**2 * node_volume
     )
     expected_et = 0.5 * np.sum(
-        EPSILON_0 * simulation.epsilon_r_et * 3.0**2 * edge_cell_volume
+        EPSILON_0 * simulation.to_numpy(simulation.epsilon_r_et) * 3.0**2 * edge_cell_volume
     )
     expected_hr = 0.5 * MU_0 * 4.0**2 * np.sum(face_cell_volume)
     expected_ht = 0.5 * MU_0 * 5.0**2 * np.sum(edge_node_volume)
-    expected_loss = np.sum(simulation.sigma_er * 2.0**2 * node_volume)
-    expected_loss += np.sum(simulation.sigma_et * 3.0**2 * edge_cell_volume)
+    expected_loss = np.sum(simulation.to_numpy(simulation.sigma_er) * 2.0**2 * node_volume)
+    expected_loss += np.sum(simulation.to_numpy(simulation.sigma_et) * 3.0**2 * edge_cell_volume)
 
     assert snapshot.scalars["energy/er_j"] == pytest.approx(expected_er)
     assert snapshot.scalars["energy/et_j"] == pytest.approx(expected_et)
@@ -156,10 +156,10 @@ def test_chunked_diagnostics_do_not_change_traces_or_fields(
 
 def test_full_horizontal_region_matches_global_energy_and_loss() -> None:
     simulation = _small_simulation()
-    simulation.er.fill(2.0)
-    simulation.et.fill(3.0)
-    simulation.hr.fill(4.0)
-    simulation.ht.fill(5.0)
+    simulation.er.fill_(2.0)
+    simulation.et.fill_(3.0)
+    simulation.hr.fill_(4.0)
+    simulation.ht.fill_(5.0)
     full = HorizontalRegion(
         np.ones(simulation.mesh.n_vertices),
         np.ones(simulation.mesh.n_edges),
@@ -188,17 +188,16 @@ def test_full_horizontal_region_matches_global_energy_and_loss() -> None:
 
 
 def test_cuda_sampler_matches_numpy_float64_reductions() -> None:
-    torch = pytest.importorskip("torch")
     if not torch.cuda.is_available():
         pytest.skip("CUDA is unavailable")
     cpu = _small_simulation()
-    cuda = _small_simulation(backend="torch", device="cuda:0")
+    cuda = _small_simulation(device="cuda:0")
     for values, constant in zip(
         (cpu.er, cpu.et, cpu.hr, cpu.ht),
         (2.0, 3.0, 4.0, 5.0),
         strict=True,
     ):
-        values.fill(constant)
+        values.fill_(constant)
     for values, constant in zip(
         (cuda.er, cuda.et, cuda.hr, cuda.ht),
         (2.0, 3.0, 4.0, 5.0),

@@ -189,12 +189,12 @@ class SurfaceImpedanceADE:
         *,
         edge_count: int,
         time_step_s: float,
-        backend: Any,
+        runtime: Any,
         global_edge_count: int | None = None,
         global_edge_indices: NDArray[np.int64] | None = None,
     ) -> None:
         self.model = model
-        self.backend = backend
+        self.runtime = runtime
         total_edges = edge_count if global_edge_count is None else global_edge_count
         conductivity = model.conductivity_for_edges(
             total_edges, global_edge_indices
@@ -204,13 +204,13 @@ class SurfaceImpedanceADE:
         poles = model.pole_rates_s_inv
         weights = model.diffusive_weights_sqrt_s_inv
         alpha = 0.5 * time_step_s * poles
-        self._decay = backend.asarray((1.0 - alpha) / (1.0 + alpha))
-        self._drive = backend.asarray(alpha / (1.0 + alpha))
-        self._history_weights = backend.asarray(weights / (1.0 + alpha))
-        self._scale = backend.asarray(
+        self._decay = runtime.as_tensor((1.0 - alpha) / (1.0 + alpha))
+        self._drive = runtime.as_tensor(alpha / (1.0 + alpha))
+        self._history_weights = runtime.as_tensor(weights / (1.0 + alpha))
+        self._scale = runtime.as_tensor(
             np.sqrt(model.permeability_h_m / conductivity)
         )
-        self.memory = backend.zeros((edge_count, model.terms))
+        self.memory = runtime.zeros((edge_count, model.terms))
 
     def advance_prescribed_magnetic(
         self,
@@ -287,7 +287,7 @@ class SurfaceImpedanceADE:
     def state_bytes(self) -> int:
         """Return persistent ADE state storage in bytes."""
 
-        return self.backend.nbytes(self.memory)
+        return self.runtime.nbytes(self.memory)
 
     @property
     def persistent_bytes(self) -> int:
@@ -300,4 +300,4 @@ class SurfaceImpedanceADE:
             self._history_weights,
             self._scale,
         )
-        return sum(self.backend.nbytes(values) for values in arrays)
+        return sum(self.runtime.nbytes(values) for values in arrays)

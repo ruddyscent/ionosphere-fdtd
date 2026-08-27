@@ -45,11 +45,11 @@ def profile_allocations(
         physics=physics,
     )
     simulation.step(warmup_steps)
-    simulation.backend.synchronize()
+    simulation._runtime.synchronize()
     activities = [torch.profiler.ProfilerActivity.CPU]
-    if simulation.backend.device.startswith("cuda"):
+    if simulation.device.type == "cuda":
         activities.append(torch.profiler.ProfilerActivity.CUDA)
-        torch.cuda.reset_peak_memory_stats(simulation.backend.torch_device)
+        torch.cuda.reset_peak_memory_stats(simulation.device)
     before_device_bytes = _device_memory_allocated(simulation)
     with torch.profiler.profile(
         activities=activities,
@@ -58,7 +58,7 @@ def profile_allocations(
     ) as profiler:
         with torch.profiler.record_function("GeodesicFDTD.field_steps"):
             simulation.step(steps)
-        simulation.backend.synchronize()
+        simulation._runtime.synchronize()
     if trace_path is not None:
         trace_path.parent.mkdir(parents=True, exist_ok=True)
         profiler.export_chrome_trace(str(trace_path))
@@ -98,10 +98,10 @@ def profile_allocations(
             "python": platform.python_version(),
             "torch": torch.__version__,
             "cuda": torch.version.cuda,
-            "device": simulation.backend.device,
+            "device": str(simulation.device),
             "device_name": (
-                torch.cuda.get_device_name(simulation.backend.torch_device)
-                if simulation.backend.device.startswith("cuda")
+                torch.cuda.get_device_name(simulation.device)
+                if simulation.device.type == "cuda"
                 else None
             ),
         },
@@ -118,8 +118,8 @@ def profile_allocations(
             "GeodesicFDTD._update_electric_fields",
             "GeodesicFDTD._radial_derivative_et",
             "GeodesicFDTD._radial_derivative_ht",
-            "TorchBackend.face_circulation",
-            "TorchBackend.dual_cell_circulation",
+            "_TorchRuntime.face_circulation",
+            "_TorchRuntime.dual_cell_circulation",
             *(
                 ("_torch_step.advance_surface_impedance",)
                 if physics == "surface-impedance"
@@ -132,7 +132,7 @@ def profile_allocations(
             ),
         ],
         "field_memory_bytes": diagnostics["field_memory_bytes"],
-        "persistent_backend_bytes": diagnostics["persistent_backend_bytes"],
+        "persistent_runtime_bytes": diagnostics["persistent_runtime_bytes"],
         "device_memory_before_profile_bytes": before_device_bytes,
         "peak_device_memory_bytes": _peak_device_memory(simulation),
         "allocation_operators": operators,
@@ -169,7 +169,6 @@ def _simulation(
         mesh=mesh,
         surface_impedance=surface,
         plasma=plasma,
-        backend="torch",
         device=device,
         dtype=dtype,
     )
@@ -219,21 +218,21 @@ def _synthetic_plasma(mesh: Any, config: SimulationConfig) -> MeshPlasmaModel:
 
 
 def _device_memory_allocated(simulation: GeodesicFDTD) -> int | None:
-    if not simulation.backend.device.startswith("cuda"):
+    if not simulation.device.type == "cuda":
         return None
     return int(
-        simulation.backend.torch.cuda.memory_allocated(
-            simulation.backend.torch_device
+        simulation._runtime.torch.cuda.memory_allocated(
+            simulation.device
         )
     )
 
 
 def _peak_device_memory(simulation: GeodesicFDTD) -> int | None:
-    if not simulation.backend.device.startswith("cuda"):
+    if not simulation.device.type == "cuda":
         return None
     return int(
-        simulation.backend.torch.cuda.max_memory_allocated(
-            simulation.backend.torch_device
+        simulation._runtime.torch.cuda.max_memory_allocated(
+            simulation.device
         )
     )
 

@@ -6,7 +6,6 @@ subdivision = 2
 radial_cells = 24
 courant = 0.35
 
-backend = "numpy"
 device = "cpu"
 dtype = "float64"
 torch_compile = false
@@ -23,7 +22,6 @@ checkpoint = "artifacts/runs/demo.npz"
 [visualization]
 resume = "artifacts/runs/demo.npz"
 steps = 0
-backend = "numpy"
 device = "cpu"
 dtype = "float64"
 

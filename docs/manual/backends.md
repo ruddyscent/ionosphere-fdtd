@@ -2,9 +2,8 @@
 
 ## Supported combinations
 
-| Backend | Device | Dtypes | Notes |
+| Runtime | Device | Dtypes | Notes |
 |---|---|---|---|
-| NumPy | CPU | `float32`, `float64` | Default is `float64` |
 | PyTorch | CPU | `float32`, `float64` | Thread count is configurable |
 | PyTorch | CUDA | `float32`, `float64` | `cuda:N` selects a specific GPU |
 | PyTorch | Metal/MPS | `float32` | `float64` is unsupported |
@@ -15,19 +14,19 @@
 
 ```bash
 # NumPy CPU
-uv run ionosphere --backend numpy --device cpu --dtype float64 --steps 1000
+uv run ionosphere --device cpu --dtype float64 --steps 1000
 
 # PyTorch CPU with one intra-op thread
-uv run --extra pytorch ionosphere \
-  --backend torch --device cpu --torch-threads 1 --dtype float32 --steps 1000
+uv run ionosphere \
+  --device cpu --torch-threads 1 --dtype float32 --steps 1000
 
 # NVIDIA CUDA
-uv run --extra pytorch ionosphere \
-  --backend torch --device cuda --dtype float32 --steps 1000
+uv run ionosphere \
+  --device cuda --dtype float32 --steps 1000
 
 # Apple Metal
-uv run --extra pytorch ionosphere \
-  --backend torch --device mps --dtype float32 --steps 1000
+uv run ionosphere \
+  --device mps --dtype float32 --steps 1000
 ```
 
 ## Two-GPU execution
@@ -38,7 +37,7 @@ the next curl. Launch the paired Simpson 2006 adaptive run with one process per
 GPU:
 
 ```bash
-uv run --extra pytorch torchrun --standalone --nproc-per-node=2 \
+uv run torchrun --standalone --nproc-per-node=2 \
   -m verification.simpson_taflove_2006.distributed_run \
   --output-dir artifacts/verification/adaptive-s10 \
   --target-subdivision 10 \
@@ -80,11 +79,11 @@ first-use cost and is intended for long runs with fixed shapes. Warm up with at
 least one complete chunk before timing, and compare eager and compiled
 execution as separate experiments.
 
-## Choosing a backend
+## Choosing a device
 
-- Use NumPy CPU for installation checks, small grids, and transparent analysis.
-- Benchmark NumPy and PyTorch CPU for small and medium grids; framework overhead
-  can exceed the arithmetic saved by an accelerator.
+- Use PyTorch CPU for installation checks, small grids, and transparent analysis.
+- Benchmark CPU for small and medium grids; framework overhead can exceed the
+  arithmetic saved by an accelerator.
 - Use CUDA or MPS when the grid and step count are large enough to amortize
   kernel-launch overhead.
 - Use `float64` for quantitative verification. Use `float32` when memory and
@@ -92,10 +91,10 @@ execution as separate experiments.
 
 ## Benchmarking
 
-Run the standardized backend matrix:
+Run the standardized device matrix:
 
 ```bash
-uv run --extra pytorch python -m benchmarks.backend_matrix \
+uv run python -m benchmarks.backend_matrix \
   --subdivision 2 --radial-cells 16 \
   --steps 200 --warmup-steps 20 --repeats 3 \
   --dtype float32 --torch-compile --torch-compile-chunk-size 8

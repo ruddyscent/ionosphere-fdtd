@@ -104,7 +104,6 @@ def _parser() -> argparse.ArgumentParser:
         choices=("point", "edge-diamond"),
         default="point",
     )
-    radar.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     radar.add_argument("--device", default="auto")
     radar.add_argument("--dtype", choices=("float32", "float64"), default="float64")
     radar.add_argument(
@@ -184,7 +183,6 @@ def _parser() -> argparse.ArgumentParser:
         "--material", choices=("etopo5", "natural-earth"), default="etopo5"
     )
     convergence.add_argument("--etopo5-path", type=Path)
-    convergence.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     convergence.add_argument("--device", default="auto")
     convergence.add_argument(
         "--dtype", choices=("float32", "float64"), default="float64"
@@ -266,7 +264,6 @@ def _run_radar(args: argparse.Namespace) -> int:
         subdivision=args.subdivision,
         material_model=args.material,
         etopo5_path=args.etopo5_path,
-        backend=args.backend,
         device=args.device,
         dtype=args.dtype,
         compile_step=args.torch_compile,
@@ -301,8 +298,8 @@ def _run_radar(args: argparse.Namespace) -> int:
     )
     print(
         f"case={args.case} grid={simulation.mesh.n_vertices:,}x"
-        f"{len(simulation.radial_steps_m)} backend={simulation.backend.name} "
-        f"device={simulation.backend.device} dtype={simulation.backend.dtype_name} "
+        f"{len(simulation.radial_steps_m)} runtime={simulation.runtime} "
+        f"device={simulation.device} dtype={simulation.dtype_name} "
         f"orientation={args.mesh_orientation} "
         f"mesh_optimization_steps={args.mesh_optimization_steps} "
         f"mesh_coordinates={args.mesh_coordinates or 'generated'} "
@@ -393,8 +390,7 @@ def _run_adaptive_convergence(args: argparse.Namespace) -> int:
                 subdivision=args.base_subdivision,
                 material_model=args.material,
                 etopo5_path=args.etopo5_path,
-                backend=args.backend,
-                device=args.device,
+                        device=args.device,
                 dtype=args.dtype,
                 compile_step=args.torch_compile,
                 compile_chunk_size=args.torch_compile_chunk_size,
@@ -411,7 +407,7 @@ def _run_adaptive_convergence(args: argparse.Namespace) -> int:
             print(
                 f"target=s{target} case={case} faces={mesh.n_faces:,} "
                 f"dt={simulation.time_step_s:.9e}s steps={steps:,} "
-                f"device={simulation.backend.device}",
+                f"device={simulation.device}",
                 flush=True,
             )
             traces = record_radar_traces(
@@ -493,9 +489,9 @@ def _analyze_adaptive(args: argparse.Namespace) -> int:
         )
     ]
     dtypes = {signature["dtype"] for signature in signatures}
-    backends = {signature["backend"] for signature in signatures}
-    if len(dtypes) != 1 or len(backends) != 1:
-        raise SystemExit("adaptive traces must share one backend and dtype")
+    runtimes = {signature["runtime"] for signature in signatures}
+    if len(dtypes) != 1 or len(runtimes) != 1:
+        raise SystemExit("adaptive traces must share one runtime and dtype")
 
     convergence = compare_radar_resolution_pairs(
         coarse_reference,
@@ -529,7 +525,7 @@ def _analyze_adaptive(args: argparse.Namespace) -> int:
     payload = {
         "format_version": 1,
         "screening": {
-            "backend": backends.pop(),
+            "runtime": runtimes.pop(),
             "dtype": dtypes.pop(),
             "relative_l2_threshold": args.relative_l2_threshold,
             "maximum_relative_l2": maximum_relative_l2,

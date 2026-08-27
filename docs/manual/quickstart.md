@@ -23,7 +23,7 @@ cp configs/ionosphere.example.toml run.toml
 uv run ionosphere --config run.toml
 ```
 
-The starter uses the same subdivision, radial grid, backend, source, and dtype
+The starter uses the same subdivision, radial grid, runtime, source, and dtype
 by restoring the simulation checkpoint for visualization. It writes a final
 checkpoint to `artifacts/runs/demo.npz`. The separate
 [`ionosphere.research.toml`](../../configs/ionosphere.research.toml) retains a
@@ -109,15 +109,15 @@ for the paper's stated surface-cell count.
 Let PyTorch select CUDA, MPS, or CPU:
 
 ```bash
-uv run --extra pytorch ionosphere \
-  --backend torch --device auto --steps 200
+uv run ionosphere \
+  --device auto --steps 200
 ```
 
 For a long, fixed-shape run, evaluate compilation separately:
 
 ```bash
-uv run --extra pytorch ionosphere \
-  --backend torch --device cuda --torch-compile --steps 20000
+uv run ionosphere \
+  --device cuda --torch-compile --steps 20000
 ```
 
 ## Use the Python API
@@ -149,7 +149,7 @@ print(simulation.diagnostics())
 er = simulation.to_numpy(simulation.er)
 ```
 
-`to_numpy()` is an explicit terminal boundary between backend-native fields
+`to_numpy()` is an explicit terminal boundary between runtime-native fields
 and host analysis code. For PyTorch fields it detaches the tensor from its
 autograd graph, moves it to CPU memory, and returns a NumPy array; do not use
 that exported array to construct a differentiable loss.

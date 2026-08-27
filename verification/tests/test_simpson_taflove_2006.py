@@ -133,7 +133,6 @@ def test_adaptive_reference_and_anomaly_runs_share_exact_mesh_signature() -> Non
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         mesh=mesh,
@@ -142,7 +141,6 @@ def test_adaptive_reference_and_anomaly_runs_share_exact_mesh_signature() -> Non
         include_oil=True,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         mesh=mesh,
@@ -249,7 +247,7 @@ def test_adaptive_analysis_writes_screening_verdict(tmp_path) -> None:
             north *= 1.3
         signature = json.dumps(
             {
-                "backend": "torch",
+                "runtime": "torch",
                 "dtype": "float32",
                 "git_revision": "test",
                 "mesh_vertices_sha256": f"vertices-{level}",
@@ -284,7 +282,7 @@ def test_adaptive_analysis_writes_screening_verdict(tmp_path) -> None:
     )
     payload = json.loads(summary.read_text(encoding="utf-8"))
 
-    assert payload["screening"]["backend"] == "torch"
+    assert payload["screening"]["runtime"] == "torch"
     assert payload["screening"]["dtype"] == "float32"
     assert payload["screening"]["relative_l2_threshold"] == 0.02
     assert payload["screening"]["maximum_relative_l2"] < 0.011
@@ -298,7 +296,6 @@ def test_conservative_radar_anomaly_preserves_oil_area_on_both_grids() -> None:
         include_oil=True,
         subdivision=3,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -426,7 +423,6 @@ def test_thesis_radar_setup_installs_day_night_ionosphere() -> None:
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         ionosphere_model="day-night",
@@ -456,7 +452,6 @@ def test_radar_setup_can_install_figure_15_material() -> None:
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         lithosphere_profile="figure-15",
@@ -481,7 +476,6 @@ def test_radar_setup_forwards_compiled_chunk_size() -> None:
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         compile_chunk_size=32,
@@ -496,7 +490,6 @@ def test_short_radar_run_records_three_surface_components() -> None:
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -527,7 +520,6 @@ def test_radar_setup_can_retain_native_orientation() -> None:
         include_oil=False,
         subdivision=1,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         mesh_orientation="native",
@@ -546,7 +538,6 @@ def test_radar_geometry_and_generated_mesh_optimization_are_configurable() -> No
         include_oil=False,
         subdivision=1,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         geometry_mode="full-spherical",
@@ -563,7 +554,6 @@ def test_radar_source_basis_and_altitude_are_configurable() -> None:
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         source_altitude_m=-625.0,
@@ -609,7 +599,6 @@ def test_etopo_radar_geometry_can_follow_local_terrain(monkeypatch) -> None:
         subdivision=0,
         material_model="etopo5",
         etopo5_path="unused.dat",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         vertical_reference="terrain",
@@ -619,7 +608,6 @@ def test_etopo_radar_geometry_can_follow_local_terrain(monkeypatch) -> None:
         subdivision=0,
         material_model="etopo5",
         etopo5_path="unused.dat",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         vertical_reference="sea-level",
@@ -645,7 +633,6 @@ def test_local_linear_radar_receiver_reconstructs_target_direction() -> None:
         include_oil=False,
         subdivision=1,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -683,7 +670,6 @@ def test_default_radar_receiver_uses_local_linear_support() -> None:
         include_oil=False,
         subdivision=1,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -699,7 +685,6 @@ def test_radar_receiver_interpolates_both_h_components_to_terrain() -> None:
         include_oil=False,
         subdivision=1,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -733,7 +718,6 @@ def test_radar_receiver_rejects_unknown_support() -> None:
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -748,7 +732,6 @@ def test_radar_courant_factor_controls_automatic_time_step() -> None:
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         courant_factor=0.4,
@@ -757,7 +740,6 @@ def test_radar_courant_factor_controls_automatic_time_step() -> None:
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
         courant_factor=1.0,
@@ -929,7 +911,6 @@ def test_recorded_radar_pair_has_matching_run_signature() -> None:
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -937,7 +918,6 @@ def test_recorded_radar_pair_has_matching_run_signature() -> None:
         include_oil=True,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )
@@ -955,7 +935,6 @@ def test_radar_trace_archive_preserves_run_signature(tmp_path) -> None:
         include_oil=False,
         subdivision=0,
         material_model="natural-earth",
-        backend="numpy",
         dtype="float64",
         compile_step=False,
     )

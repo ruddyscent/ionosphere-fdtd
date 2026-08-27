@@ -1,4 +1,5 @@
 import pytest
+import torch
 
 from benchmarks.backend_matrix import run_backend_matrix
 from benchmarks.backend_scaling import benchmark_cases
@@ -6,7 +7,7 @@ from benchmarks.distributed_scaling import summarize_distributed_timings
 from benchmarks.torch_allocations import profile_allocations
 
 
-def test_backend_matrix_always_reports_numpy_cpu() -> None:
+def test_runtime_matrix_always_reports_torch_cpu() -> None:
     payload = run_backend_matrix(
         subdivision=0,
         radial_cells=2,
@@ -14,43 +15,38 @@ def test_backend_matrix_always_reports_numpy_cpu() -> None:
         warmup_steps=0,
         repeats=1,
     )
-    numpy_result = payload["results"][0]
-    assert numpy_result["backend"] == "numpy"
-    assert numpy_result["device"] == "cpu"
-    assert numpy_result["status"] == "ok"
-    assert numpy_result["steps_per_second"] > 0.0
+    cpu_result = payload["results"][0]
+    assert cpu_result["runtime"] == "torch"
+    assert cpu_result["device"] == "cpu"
+    assert cpu_result["status"] == "ok"
+    assert cpu_result["steps_per_second"] > 0.0
     assert payload["configuration"]["torch_compile_chunk_size"] == 8
-    assert numpy_result["compile_chunk_size"] == 8
-    assert numpy_result["initialization_seconds"] > 0.0
-    assert numpy_result["compile_seconds"] is None
-    assert numpy_result["persistent_memory_bytes"] >= numpy_result["field_memory_bytes"]
-    assert numpy_result["peak_process_memory_bytes"] > 0
+    assert cpu_result["compile_chunk_size"] == 8
+    assert cpu_result["initialization_seconds"] > 0.0
+    assert cpu_result["compile_seconds"] is None
+    assert cpu_result["persistent_memory_bytes"] >= cpu_result["field_memory_bytes"]
+    assert cpu_result["peak_process_memory_bytes"] > 0
 
 
-def test_scaling_cases_use_only_eager_mode_for_numpy() -> None:
+def test_scaling_cases_cover_pytorch_devices_and_modes() -> None:
     cases = benchmark_cases(
         (2,),
         (16,),
         ("float32", "float64"),
-        ("numpy", "torch-cpu", "cuda", "mps"),
+        ("torch-cpu", "cuda", "mps"),
         ("eager", "compiled"),
     )
 
-    assert len(cases) == 14
-    assert all(
-        case["mode"] == "eager"
-        for case in cases
-        if case["implementation"] == "numpy"
-    )
+    assert len(cases) == 12
     assert {
-        (case["backend"], case["device"])
+        (case["implementation"], case["device"])
         for case in cases
     } == {
-        ("numpy", "cpu"),
-        ("torch", "cpu"),
-        ("torch", "cuda"),
-        ("torch", "mps"),
+        ("torch-cpu", "cpu"),
+        ("cuda", "cuda"),
+        ("mps", "mps"),
     }
+    assert {case["mode"] for case in cases} == {"eager", "compiled"}
 
 
 def test_distributed_timing_uses_median_slow_rank_duration() -> None:
@@ -63,7 +59,6 @@ def test_distributed_timing_uses_median_slow_rank_duration() -> None:
 
 
 def test_torch_allocation_profiler_reports_generic_cpu_operators() -> None:
-    pytest.importorskip("torch")
 
     payload = profile_allocations(
         subdivision=0,
@@ -76,5 +71,5 @@ def test_torch_allocation_profiler_reports_generic_cpu_operators() -> None:
 
     assert payload["configuration"]["physics"] == "vacuum"
     assert payload["field_memory_bytes"] > 0
-    assert payload["persistent_backend_bytes"] >= payload["field_memory_bytes"]
+    assert payload["persistent_runtime_bytes"] >= payload["field_memory_bytes"]
     assert payload["allocation_operators"]

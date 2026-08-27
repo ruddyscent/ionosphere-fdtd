@@ -15,7 +15,7 @@ The principal option groups are:
 |---|---|
 | Work | `--steps`, `--dry-run`, `--report-every`, `--resume`, `--checkpoint`, `--checkpoint-every` |
 | Grid | `--subdivision`, `--radial-cells`, `--surface-step`, `--courant` |
-| Backend | `--backend`, `--device`, `--dtype`, `--torch-compile`, `--torch-compile-chunk-size`, `--torch-threads` |
+| Runtime | `--device`, `--dtype`, `--torch-compile`, `--torch-compile-chunk-size`, `--torch-threads` |
 | Source | `--source-current`, `--source-length`, `--source-frequency`, `--source-center`, `--source-width`, `--source-latitude`, `--source-longitude` |
 | Anomaly | `--oil-anomaly`, `--anomaly-radius-km` |
 
@@ -33,7 +33,7 @@ uv run ionosphere --config run.toml --dry-run
 ```
 
 The command constructs and validates the selected mesh, material, source,
-backend, device, precision, and time step, then reports exact field memory
+device, precision, and time step, then reports exact field memory
 without advancing a field step or writing a configured checkpoint. Use
 `--version` to report the installed package version. Boolean options accept
 both forms, such as `--torch-compile` and `--no-torch-compile`, so command-line
@@ -63,7 +63,6 @@ destination spelling: replace option hyphens with underscores. For example,
 steps = 20000
 subdivision = 5
 radial_cells = 40
-backend = "torch"
 device = "cuda:0"
 dtype = "float32"
 torch_compile = true
@@ -148,7 +147,7 @@ uv run ionosphere --resume run.npz --steps 5000 --checkpoint run.npz
 `--steps` always means additional steps. On resume, the checkpoint owns the
 grid, material, source, time step, and current step count. Backend options may
 be changed, so a NumPy checkpoint can be resumed with, for example,
-`--backend torch --device cuda`. With `--dtype auto`, restart preserves the
+`--device cuda`. With `--dtype auto`, restart preserves the
 stored dtype; an explicit `--dtype` converts fields to that precision.
 
 Checkpoint updates are atomic: the completed temporary archive replaces the
@@ -207,7 +206,7 @@ traces.
 
 ## Exit behavior
 
-Invalid grids, unsupported backend/device/dtype combinations, unstable time
+Invalid grids, unsupported device/dtype combinations, unstable time
 steps, and unresolved required arguments terminate with a nonzero status and a
-diagnostic message. Normal runs print the selected mesh, backend, time step,
+diagnostic message. Normal runs print the selected mesh, runtime, time step,
 memory use, and field maxima.

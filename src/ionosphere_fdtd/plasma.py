@@ -391,15 +391,15 @@ class MeshPlasmaModel:
 class MagnetizedPlasmaADE:
     """Exact constant-E charged-fluid update at collocated vector samples."""
 
-    def __init__(self, model: MeshPlasmaModel, time_step_s: float, backend: Any):
+    def __init__(self, model: MeshPlasmaModel, time_step_s: float, runtime: Any):
         self.model = model
-        self.backend = backend
+        self.runtime = runtime
         magnetic = model.magnetic_field_t
         magnitude = np.linalg.norm(magnetic, axis=2)
         direction = np.zeros_like(magnetic)
         nonzero = magnitude > 0.0
         direction[nonzero] = magnetic[nonzero] / magnitude[nonzero, None]
-        self._magnetic_direction = backend.asarray(direction)
+        self._magnetic_direction = runtime.as_tensor(direction)
         self._coefficients = []
         self.current_density = []
         for species in model.species:
@@ -417,7 +417,7 @@ class MagnetizedPlasmaADE:
             )
             self._coefficients.append(
                 tuple(
-                    backend.asarray(value)
+                    runtime.as_tensor(value)
                     for value in (
                         decay,
                         np.cos(angle),
@@ -428,16 +428,16 @@ class MagnetizedPlasmaADE:
                     )
                 )
             )
-            self.current_density.append(backend.zeros((*magnitude.shape, 3)))
+            self.current_density.append(runtime.zeros((*magnitude.shape, 3)))
 
     def advance(self, electric_v_m: Any) -> Any:
         """Advance every species current and return their summed new value."""
 
-        total = self.backend.zeros(tuple(electric_v_m.shape))
+        total = self.runtime.zeros(tuple(electric_v_m.shape))
         b = self._magnetic_direction
         electric_parallel = (electric_v_m * b).sum(axis=2)[..., None] * b
         electric_perpendicular = electric_v_m - electric_parallel
-        electric_cross = _cross_with_b(electric_perpendicular, b, self.backend)
+        electric_cross = _cross_with_b(electric_perpendicular, b, self.runtime)
         next_current_density = []
         for index, coefficients in enumerate(self._coefficients):
             decay, cosine, sine, drive_parallel, drive_real, drive_imag = (
@@ -446,7 +446,7 @@ class MagnetizedPlasmaADE:
             current = self.current_density[index]
             current_parallel = (current * b).sum(axis=2)[..., None] * b
             current_perpendicular = current - current_parallel
-            current_cross = _cross_with_b(current_perpendicular, b, self.backend)
+            current_cross = _cross_with_b(current_perpendicular, b, self.runtime)
             updated = (
                 decay[..., None] * current_parallel
                 + drive_parallel[..., None] * electric_parallel
@@ -465,13 +465,13 @@ class MagnetizedPlasmaADE:
 
     @property
     def state_bytes(self) -> int:
-        return sum(self.backend.nbytes(values) for values in self.current_density)
+        return sum(self.runtime.nbytes(values) for values in self.current_density)
 
     @property
     def persistent_bytes(self) -> int:
         arrays = [self._magnetic_direction, *self.current_density]
         arrays.extend(value for group in self._coefficients for value in group)
-        return sum(self.backend.nbytes(values) for values in arrays)
+        return sum(self.runtime.nbytes(values) for values in arrays)
 
 
 class GeodesicPlasmaCoupler:
@@ -483,30 +483,30 @@ class GeodesicPlasmaCoupler:
         mesh: GeodesicMesh,
         radial_midpoint_altitudes_m: NDArray[np.float64],
         time_step_s: float,
-        backend: Any,
+        runtime: Any,
     ) -> None:
         model.validate_grid(mesh, radial_midpoint_altitudes_m)
         self.mesh = mesh
-        self.backend = backend
+        self.runtime = runtime
         reconstruction, face_tangents = _face_reconstruction(mesh)
-        self._face_edges = backend.index_array(mesh.face_edges)
-        self._faces = backend.index_array(mesh.faces)
-        self._reconstruction = backend.asarray(reconstruction)
-        self._face_centers = backend.asarray(mesh.face_centers)
+        self._face_edges = runtime.index_tensor(mesh.face_edges)
+        self._faces = runtime.index_tensor(mesh.faces)
+        self._reconstruction = runtime.as_tensor(reconstruction)
+        self._face_centers = runtime.as_tensor(mesh.face_centers)
         left_slots = _edge_face_slots(mesh, mesh.edge_left_faces)
         right_slots = _edge_face_slots(mesh, mesh.edge_right_faces)
-        self._left_faces = backend.index_array(mesh.edge_left_faces)
-        self._right_faces = backend.index_array(mesh.edge_right_faces)
-        self._left_tangents = backend.asarray(
+        self._left_faces = runtime.index_tensor(mesh.edge_left_faces)
+        self._right_faces = runtime.index_tensor(mesh.edge_right_faces)
+        self._left_tangents = runtime.as_tensor(
             face_tangents[mesh.edge_left_faces, left_slots]
         )
-        self._right_tangents = backend.asarray(
+        self._right_tangents = runtime.as_tensor(
             face_tangents[mesh.edge_right_faces, right_slots]
         )
         vertex_faces, vertex_weights = _vertex_face_average(mesh)
-        self._vertex_faces = backend.index_array(vertex_faces)
-        self._vertex_face_weights = backend.asarray(vertex_weights)
-        self.ade = MagnetizedPlasmaADE(model, time_step_s, backend)
+        self._vertex_faces = runtime.index_tensor(vertex_faces)
+        self._vertex_face_weights = runtime.as_tensor(vertex_weights)
+        self.ade = MagnetizedPlasmaADE(model, time_step_s, runtime)
 
     def advance(self, er: Any, et: Any) -> tuple[Any, Any]:
         """Advance collocated plasma current and return Jr/Jt density arrays."""
@@ -537,7 +537,7 @@ class GeodesicPlasmaCoupler:
             radial_at_faces[self._vertex_faces]
             * self._vertex_face_weights[:, :, None]
         ).sum(axis=1)
-        radial_current = self.backend.zeros(
+        radial_current = self.runtime.zeros(
             (radial_at_vertices.shape[0], radial_at_vertices.shape[1] + 1)
         )
         radial_current[:, 0] = radial_at_vertices[:, 0]
@@ -563,7 +563,7 @@ class GeodesicPlasmaCoupler:
             self._vertex_face_weights,
         )
         return self.ade.persistent_bytes + sum(
-            self.backend.nbytes(values) for values in arrays
+            self.runtime.nbytes(values) for values in arrays
         )
 
 
@@ -610,8 +610,8 @@ def _vertex_face_average(
     return faces, weights
 
 
-def _cross_with_b(values: Any, b: Any, backend: Any) -> Any:
-    result = backend.empty_like(values)
+def _cross_with_b(values: Any, b: Any, runtime: Any) -> Any:
+    result = runtime.empty_like(values)
     result[..., 0] = values[..., 1] * b[..., 2] - values[..., 2] * b[..., 1]
     result[..., 1] = values[..., 2] * b[..., 0] - values[..., 0] * b[..., 2]
     result[..., 2] = values[..., 0] * b[..., 1] - values[..., 1] * b[..., 0]

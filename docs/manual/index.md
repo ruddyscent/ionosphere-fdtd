@@ -58,7 +58,7 @@ the source-only `verification` package.
 
 ## Units and field layout
 
-All public values use SI units. The evolving arrays are backend-native NumPy
+All public values use SI units. The evolving arrays are runtime-native PyTorch
 arrays or PyTorch tensors:
 
 | Field | Shape association | Time |

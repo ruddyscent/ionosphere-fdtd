@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -299,11 +298,8 @@ class DistributedGeodesicFDTD:
         self.steps = 0
         self.time_s = 0.0
         self.compiled = False
-        self.backend = SimpleNamespace(
-            name="torch-distributed",
-            device=str(self.device),
-            dtype_name=self.dtype_name,
-        )
+        self.runtime = "torch"
+        self.threads = self._runtime.threads
 
         receive = self.rank_partition.receive_halos[0]
         self._vertex_layout = _layout(
@@ -355,7 +351,7 @@ class DistributedGeodesicFDTD:
                 surface_impedance,
                 edge_count=len(self.rank_partition.owned_edges),
                 time_step_s=self.time_step_s,
-                backend=_TorchArrayAdapter(self._runtime),
+                runtime=_TorchArrayAdapter(self._runtime),
                 global_edge_count=mesh.n_edges,
                 global_edge_indices=self.rank_partition.owned_edges,
             )
@@ -941,7 +937,7 @@ class _TorchArrayAdapter:
     def __init__(self, runtime: _TorchRuntime) -> None:
         self.runtime = runtime
 
-    def asarray(self, values: Any) -> Any:
+    def as_tensor(self, values: Any) -> Any:
         return self.runtime.as_tensor(values)
 
     def zeros(self, shape: tuple[int, ...]) -> Any:

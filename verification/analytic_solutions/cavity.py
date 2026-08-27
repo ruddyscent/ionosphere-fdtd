@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import numpy as np
+import torch
 from numpy.polynomial.legendre import Legendre
 from numpy.typing import NDArray
 from scipy.special import spherical_jn, spherical_yn
@@ -128,24 +129,26 @@ def initialize_electric_standing_mode(
 ) -> None:
     if simulation.er.shape != mode.er_v_m.shape or simulation.et.shape != mode.et_v_m.shape:
         raise ValueError("mode and simulation shapes do not match")
-    simulation.er[:] = mode.er_v_m
-    simulation.et[:] = mode.et_v_m
-    simulation.hr[:] = 0.0
-    simulation.ht[:] = 0.0
+    simulation.er.copy_(torch.as_tensor(mode.er_v_m, device=simulation.device, dtype=simulation.dtype))
+    simulation.et.copy_(torch.as_tensor(mode.et_v_m, device=simulation.device, dtype=simulation.dtype))
+    simulation.hr.zero_()
+    simulation.ht.zero_()
 
 
 def project_electric_mode(
     simulation: GeodesicFDTD, mode: ElectricMode
 ) -> Projection:
-    numerator = np.sum(mode.er_weight * simulation.er * mode.er_v_m)
-    numerator += np.sum(mode.et_weight * simulation.et * mode.et_v_m)
+    er = simulation.to_numpy(simulation.er)
+    et = simulation.to_numpy(simulation.et)
+    numerator = np.sum(mode.er_weight * er * mode.er_v_m)
+    numerator += np.sum(mode.et_weight * et * mode.et_v_m)
     denominator = np.sum(mode.er_weight * mode.er_v_m**2)
     denominator += np.sum(mode.et_weight * mode.et_v_m**2)
     amplitude = float(numerator / denominator)
-    residual = np.sum(mode.er_weight * (simulation.er - amplitude * mode.er_v_m) ** 2)
-    residual += np.sum(mode.et_weight * (simulation.et - amplitude * mode.et_v_m) ** 2)
-    field_norm = np.sum(mode.er_weight * simulation.er**2)
-    field_norm += np.sum(mode.et_weight * simulation.et**2)
+    residual = np.sum(mode.er_weight * (er - amplitude * mode.er_v_m) ** 2)
+    residual += np.sum(mode.et_weight * (et - amplitude * mode.et_v_m) ** 2)
+    field_norm = np.sum(mode.er_weight * er**2)
+    field_norm += np.sum(mode.et_weight * et**2)
     leakage = float(np.sqrt(residual / field_norm)) if field_norm > 0.0 else 0.0
     return Projection(amplitude, leakage)
 

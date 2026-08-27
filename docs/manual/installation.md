@@ -48,7 +48,7 @@ For repository development and the complete test suite, install every
 development extra:
 
 ```bash
-uv sync --extra test --extra visualization --extra pytorch --extra verification
+uv sync --extra test --extra visualization --extra verification
 ```
 
 ## Editable pip installation

@@ -23,7 +23,6 @@ def test_shipped_example_is_cpu_safe_and_uses_one_demo_model() -> None:
         ["--config", str(config), "surface"]
     )
 
-    assert simulation.backend == visualization.backend == "numpy"
     assert simulation.device == visualization.device == "cpu"
     assert simulation.dtype == visualization.dtype == "float64"
     assert simulation.subdivision == 2
@@ -44,7 +43,6 @@ def test_shipped_research_template_remains_parseable() -> None:
         ["--config", str(config), "traces"]
     )
 
-    assert simulation.backend == visualization.backend == "torch"
     assert simulation.device == visualization.device == "cuda:0"
     assert simulation.subdivision == 5
     assert simulation.steps == 20_000
@@ -60,7 +58,6 @@ def test_simulation_toml_defaults_and_cli_precedence(tmp_path: Path) -> None:
 [ionosphere]
 steps = 1200
 subdivision = 5
-backend = "torch"
 device = "cuda:0"
 dtype = "float32"
 torch_compile = true
@@ -74,11 +71,25 @@ checkpoint = "result.npz"
 
     assert args.steps == 25
     assert args.subdivision == 5
-    assert args.backend == "torch"
     assert args.device == "cpu"
     assert args.dtype == "float32"
     assert args.torch_compile is True
     assert args.checkpoint == Path("result.npz")
+
+
+def test_legacy_backend_cli_option_has_migration_guidance() -> None:
+    with pytest.raises(SystemExit, match="PyTorch is now the only compute runtime"):
+        parse_simulation_args(["--backend", "numpy"])
+
+    with pytest.raises(SystemExit, match="select hardware with --device"):
+        parse_visualization_args(["--backend=torch", "surface"])
+
+
+def test_legacy_backend_toml_key_has_migration_guidance(tmp_path: Path) -> None:
+    config = _write(tmp_path, '[ionosphere]\nbackend = "numpy"\n')
+
+    with pytest.raises(SystemExit, match="TOML key ionosphere.backend was removed"):
+        parse_simulation_args(["--config", str(config)])
 
 
 def test_cli_can_disable_boolean_enabled_by_toml(tmp_path: Path) -> None:

@@ -395,7 +395,6 @@ def create_radar_simulation(
     subdivision: int = PAPER_SUBDIVISION,
     material_model: str = "etopo5",
     etopo5_path: str | Path | None = None,
-    backend: str = "torch",
     device: str = "auto",
     dtype: str = "float64",
     compile_step: bool = True,
@@ -546,7 +545,6 @@ def create_radar_simulation(
         ),
         material=material,
         source=source,
-        backend=backend,
         device=device,
         dtype=dtype,
         compile_step=compile_step,
@@ -898,8 +896,8 @@ def _radar_run_signature(
         "vertical_reference": str(
             getattr(simulation, "radar_vertical_reference", "sea-level")
         ),
-        "backend": simulation.backend.name,
-        "dtype": simulation.backend.dtype_name,
+        "runtime": simulation.runtime,
+        "dtype": simulation.dtype_name,
         "compiled": simulation.compiled,
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))

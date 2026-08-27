@@ -116,13 +116,13 @@ def test_checkpoint_preserves_tangential_source_and_optimized_mesh(tmp_path) -> 
         simulation.save_checkpoint(tmp_path / "tangential.npz")
     )
 
-    assert restored.backend.dtype_name == "float32"
+    assert restored.dtype_name == "float32"
     assert_same_state(simulation, restored)
 
     converted = GeodesicFDTD.load_checkpoint(
         tmp_path / "tangential.npz", dtype="float64"
     )
-    assert converted.backend.dtype_name == "float64"
+    assert converted.dtype_name == "float64"
     for name in ("er", "et", "hr", "ht"):
         np.testing.assert_array_equal(
             converted.to_numpy(getattr(converted, name)),
@@ -171,13 +171,16 @@ def test_checkpoint_loads_legacy_v1_uniform_mesh(tmp_path) -> None:
         }
     metadata = json.loads(str(arrays["metadata"].item()))
     metadata["version"] = 1
+    metadata["runtime"] = {"backend": "numpy", "dtype": "float64"}
     metadata.pop("mesh")
     arrays["metadata"] = np.asarray(json.dumps(metadata))
     legacy = tmp_path / "legacy-v1.npz"
     np.savez_compressed(legacy, **arrays)
 
-    restored = GeodesicFDTD.load_checkpoint(legacy)
+    restored = GeodesicFDTD.load_checkpoint(legacy, device="cpu", dtype="float32")
 
+    assert restored.runtime == "torch"
+    assert restored.dtype_name == "float32"
     assert_same_state(simulation, restored)
 
 
@@ -192,13 +195,35 @@ def test_checkpoint_loads_legacy_v2_without_surface_state(tmp_path) -> None:
         }
     metadata = json.loads(str(arrays["metadata"].item()))
     metadata["version"] = 2
+    metadata["runtime"] = {"backend": "numpy", "dtype": "float64"}
     metadata.pop("surface_impedance")
     arrays["metadata"] = np.asarray(json.dumps(metadata))
     legacy = tmp_path / "legacy-v2.npz"
     np.savez_compressed(legacy, **arrays)
 
-    restored = GeodesicFDTD.load_checkpoint(legacy)
+    restored = GeodesicFDTD.load_checkpoint(legacy, device="cpu", dtype="float32")
 
+    assert restored.runtime == "torch"
+    assert restored.dtype_name == "float32"
+    assert_same_state(simulation, restored)
+
+
+def test_checkpoint_loads_legacy_v3_on_selected_runtime(tmp_path) -> None:
+    simulation = GeodesicFDTD(checkpoint_config())
+    current = simulation.save_checkpoint(tmp_path / "current-v4.npz")
+    with np.load(current, allow_pickle=False) as archive:
+        arrays = {name: np.array(archive[name], copy=True) for name in archive.files}
+    metadata = json.loads(str(arrays["metadata"].item()))
+    metadata["version"] = 3
+    metadata["runtime"] = {"backend": "numpy", "dtype": "float64"}
+    arrays["metadata"] = np.asarray(json.dumps(metadata))
+    legacy = tmp_path / "legacy-v3.npz"
+    np.savez_compressed(legacy, **arrays)
+
+    restored = GeodesicFDTD.load_checkpoint(legacy, device="cpu", dtype="float32")
+
+    assert restored.runtime == "torch"
+    assert restored.dtype_name == "float32"
     assert_same_state(simulation, restored)
 
 

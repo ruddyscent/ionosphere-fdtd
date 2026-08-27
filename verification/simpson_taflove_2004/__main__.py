@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ionosphere_fdtd.backends import BackendUnavailableError
+from ionosphere_fdtd import BackendUnavailableError
 
 from ..common.archive import save_npz_atomic
 from ..mesh_optimization.mesquite import load_optimized_mesh
@@ -109,7 +109,6 @@ def _parser() -> argparse.ArgumentParser:
         default=REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
         help="representative resistivity below 60 km from Hermance Figure 6",
     )
-    parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
     parser.add_argument(
         "--dtype", choices=("auto", "float32", "float64"), default="float64"
@@ -187,7 +186,6 @@ def main(argv: list[str] | None = None) -> int:
         simulation = create_validation_simulation(
             subdivision=args.subdivision,
             material_model=args.material,
-            backend=args.backend,
             device=args.device,
             dtype=args.dtype,
             compile_step=args.torch_compile,
@@ -212,8 +210,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(str(error)) from error
     print(
         f"grid={simulation.mesh.n_vertices:,}x{simulation.config.radial_cells} "
-        f"backend={simulation.backend.name} device={simulation.backend.device} "
-        f"dtype={simulation.backend.dtype_name} material={args.material} "
+        f"runtime={simulation.runtime} device={simulation.device} "
+        f"dtype={simulation.dtype_name} material={args.material} "
         f"mesh_optimization_steps={args.mesh_optimization_steps} "
         f"mesh_coordinates={args.mesh_coordinates or 'generated'} "
         f"minimum_ocean_depth_km={args.minimum_ocean_depth_km:g} "
@@ -382,9 +380,9 @@ def main(argv: list[str] | None = None) -> int:
             radial_support=args.radial_support,
             tangential_interface=args.tangential_interface,
             tangential_support=args.tangential_support,
-            backend=simulation.backend.name,
-            device=simulation.backend.device,
-            dtype=simulation.backend.dtype_name,
+            runtime=simulation.runtime,
+            device=simulation.device,
+            dtype=simulation.dtype_name,
             compiled=simulation.compiled,
             elapsed_s=elapsed_s,
             metrics=metrics,
@@ -416,7 +414,7 @@ def _reproduction_command(args: argparse.Namespace) -> str:
     )
     parts = [
         f"uv run {tensorboard_dependency}"
-        "--extra pytorch --extra visualization python -m "
+        "--extra visualization python -m "
         "verification.simpson_taflove_2004",
         f"--subdivision {args.subdivision}",
         f"--mesh-orientation {quote(args.mesh_orientation)}",
@@ -426,7 +424,6 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         f"{args.deep_lithosphere_resistivity_ohm_m:g}",
         f"--steps {args.steps}",
         f"--material {quote(args.material)}",
-        f"--backend {quote(args.backend)}",
         f"--device {quote(args.device)}",
         f"--dtype {quote(args.dtype)}",
         f"--dft-window {quote(args.dft_window)}",

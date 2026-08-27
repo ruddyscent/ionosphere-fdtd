@@ -107,7 +107,6 @@ def main(argv: list[str] | None = None) -> int:
                 subdivision=args.base_subdivision,
                 material_model=args.material,
                 etopo5_path=args.etopo5_path,
-                backend="numpy",
                 dtype="float64",
                 compile_step=False,
                 mesh=mesh,

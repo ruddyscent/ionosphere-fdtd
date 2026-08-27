@@ -54,7 +54,6 @@ epsilon_r_et = torch.full(
 
 simulation = GeodesicFDTD(
     config,
-    backend="torch",
     device="cpu",
     dtype="float64",
     material_tensors=SampledMaterialTensors(
@@ -359,7 +358,7 @@ $0.5/f$. The solver rejects a carrier at or above the time-step Nyquist limit.
 
 ### Differentiable source currents
 
-With the PyTorch backend, `step()`, `record_er_observations()`, and
+With the PyTorch runtime, `step()`, `record_er_observations()`, and
 `record_h_observations()` accept a one-dimensional `currents` tensor with one
 value per requested step. A tensor already on the simulation device and dtype
 is used directly, so its autograd history is preserved. Observation methods

@@ -120,7 +120,7 @@ simulation.step(10_000)
 simulation.save_checkpoint("run.npz")
 
 restored = GeodesicFDTD.load_checkpoint(
-    "run.npz", backend="torch", device="cuda"
+    "run.npz", device="cuda"
 )
 restored.step(5_000)
 ```

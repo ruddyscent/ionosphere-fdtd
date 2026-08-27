@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import torch
 
 from ionosphere_fdtd.constants import C_0, EPSILON_0
 from ionosphere_fdtd.mesh import build_geodesic_mesh
@@ -102,15 +103,15 @@ def test_tm_r_surface_eigenmode_matches_leapfrog_dispersion() -> None:
     eigenvalue = -float(eigenvalues[selected].real)
     mode = eigenvectors[:, selected].real
     layer = 1
-    simulation.er[:, layer] = mode
+    simulation.er[:, layer].copy_(torch.as_tensor(mode))
     amplitudes = [1.0]
 
     for _ in range(100):
         simulation._update_magnetic_fields()
         simulation._update_electric_fields()
-        simulation.et[:] = 0.0
-        simulation.hr[:] = 0.0
-        amplitudes.append(float(simulation.er[:, layer] @ mode / (mode @ mode)))
+        simulation.et.zero_()
+        simulation.hr.zero_()
+        amplitudes.append(float(simulation.to_numpy(simulation.er[:, layer]) @ mode / (mode @ mode)))
 
     radius = simulation.radii_m[layer]
     q = (C_0 * simulation.time_step_s) ** 2 * eigenvalue / radius**2
@@ -119,7 +120,7 @@ def test_tm_r_surface_eigenmode_matches_leapfrog_dispersion() -> None:
     expected = np.cos((steps + 0.5) * phase) / np.cos(0.5 * phase)
 
     np.testing.assert_allclose(amplitudes, expected, rtol=0.0, atol=8.0e-14)
-    assert not np.any(simulation.hr)
+    assert not simulation.hr.any().item()
 
 
 def test_te_r_surface_eigenmode_matches_leapfrog_dispersion() -> None:
@@ -142,15 +143,15 @@ def test_te_r_surface_eigenmode_matches_leapfrog_dispersion() -> None:
     eigenvalue = float(eigenvalues[selected].real)
     mode = eigenvectors[:, selected].real
     layer = 1
-    simulation.hr[:, layer] = mode
+    simulation.hr[:, layer].copy_(torch.as_tensor(mode))
     amplitudes = [1.0]
 
     for _ in range(100):
         simulation._update_magnetic_fields()
-        simulation.ht[:] = 0.0
+        simulation.ht.zero_()
         simulation._update_electric_fields()
-        simulation.er[:] = 0.0
-        amplitudes.append(float(simulation.hr[:, layer] @ mode / (mode @ mode)))
+        simulation.er.zero_()
+        amplitudes.append(float(simulation.to_numpy(simulation.hr[:, layer]) @ mode / (mode @ mode)))
 
     radius = simulation.radial_midpoints_m[layer]
     q = (C_0 * simulation.time_step_s) ** 2 * eigenvalue / radius**2
@@ -159,7 +160,7 @@ def test_te_r_surface_eigenmode_matches_leapfrog_dispersion() -> None:
     expected = np.cos((steps - 0.5) * phase) / np.cos(0.5 * phase)
 
     np.testing.assert_allclose(amplitudes, expected, rtol=0.0, atol=8.0e-14)
-    assert not np.any(simulation.er)
+    assert not simulation.er.any().item()
 
 
 @pytest.mark.parametrize("orientation", ("polar", "native"))
@@ -222,7 +223,7 @@ def test_conductive_update_is_passive_even_in_the_stiff_limit() -> None:
         material=UniformConductiveMaterial(1.0),
         dtype="float64",
     )
-    simulation.er.fill(1.0)
+    simulation.er.fill_(1.0)
     norms = [float(np.linalg.norm(simulation.er))]
 
     for _ in range(20):
@@ -230,8 +231,8 @@ def test_conductive_update_is_passive_even_in_the_stiff_limit() -> None:
         norms.append(float(np.linalg.norm(simulation.er)))
 
     assert np.all(np.diff(norms) <= 0.0)
-    assert np.max(simulation._ca_er) < 1.0
-    assert np.min(simulation._ca_er) >= 0.0
+    assert torch.max(simulation._ca_er).item() < 1.0
+    assert torch.min(simulation._ca_er).item() >= 0.0
 
 
 def test_exponential_conductive_forcing_converges_at_second_order() -> None:
@@ -282,13 +283,13 @@ def test_exponential_loss_matches_exact_stiff_decay_without_sign_flip() -> None:
         material=UniformConductiveMaterial(conductivity),
         dtype="float64",
     )
-    simulation.er.fill(1.0)
+    simulation.er.fill_(1.0)
     exact = np.exp(-conductivity * simulation.time_step_s / EPSILON_0)
 
     simulation.step()
 
     np.testing.assert_allclose(simulation.er, exact, rtol=0.0, atol=1.0e-300)
-    assert np.all(simulation.er >= 0.0)
+    assert torch.all(simulation.er >= 0.0).item()
 
 
 def test_trapezoidal_loss_mode_retains_legacy_coefficients() -> None:
@@ -311,7 +312,7 @@ def test_trapezoidal_loss_mode_retains_legacy_coefficients() -> None:
         rtol=0.0,
         atol=0.0,
     )
-    assert np.all(simulation._ca_er < 0.0)
+    assert torch.all(simulation._ca_er < 0.0).item()
 
 
 def test_material_aware_cfl_keeps_subvacuum_permittivity_bounded() -> None:
@@ -321,11 +322,11 @@ def test_material_aware_cfl_keeps_subvacuum_permittivity_bounded() -> None:
         dtype="float64",
     )
     generator = np.random.default_rng(20260805)
-    simulation.er[:] = generator.standard_normal(simulation.er.shape)
-    simulation.et[:] = generator.standard_normal(simulation.et.shape)
+    simulation.er.copy_(torch.as_tensor(generator.standard_normal(simulation.er.shape)))
+    simulation.et.copy_(torch.as_tensor(generator.standard_normal(simulation.et.shape)))
     initial_maximum = max(
-        float(np.max(np.abs(simulation.er))),
-        float(np.max(np.abs(simulation.et))),
+        float(np.max(np.abs(simulation.to_numpy(simulation.er)))),
+        float(np.max(np.abs(simulation.to_numpy(simulation.et)))),
     )
     maximum = initial_maximum
 
@@ -333,8 +334,8 @@ def test_material_aware_cfl_keeps_subvacuum_permittivity_bounded() -> None:
         simulation.step()
         maximum = max(
             maximum,
-            float(np.max(np.abs(simulation.er))),
-            float(np.max(np.abs(simulation.et))),
+            float(np.max(np.abs(simulation.to_numpy(simulation.er)))),
+            float(np.max(np.abs(simulation.to_numpy(simulation.et)))),
         )
 
     assert np.isfinite(maximum)
@@ -357,8 +358,8 @@ def test_nonuniform_radial_stencils_satisfy_weighted_adjoint_identity() -> None:
         dtype="float64",
     )
     generator = np.random.default_rng(20260805)
-    simulation.et[:] = generator.standard_normal(simulation.et.shape)
-    simulation.ht[:] = generator.standard_normal(simulation.ht.shape)
+    simulation.et.copy_(torch.as_tensor(generator.standard_normal(simulation.et.shape)))
+    simulation.ht.copy_(torch.as_tensor(generator.standard_normal(simulation.ht.shape)))
     derivative_et = simulation.to_numpy(simulation._radial_derivative_et())
     derivative_ht = simulation.to_numpy(simulation._radial_derivative_ht())
     ht_weights = np.empty(len(altitudes))
@@ -366,9 +367,9 @@ def test_nonuniform_radial_stencils_satisfy_weighted_adjoint_identity() -> None:
     ht_weights[-1] = 0.5 * simulation.radial_steps_m[-1]
     ht_weights[1:-1] = np.diff(simulation.radial_midpoints_m)
 
-    left = np.sum(simulation.ht * derivative_et * ht_weights[None, :])
+    left = np.sum(simulation.to_numpy(simulation.ht) * derivative_et * ht_weights[None, :])
     right = np.sum(
-        simulation.et * derivative_ht * simulation.radial_steps_m[None, :]
+        simulation.to_numpy(simulation.et) * derivative_ht * simulation.radial_steps_m[None, :]
     )
 
     assert left + right == pytest.approx(0.0, abs=2.0e-11)
@@ -389,7 +390,7 @@ def test_nonuniform_radial_derivative_annihilates_constant_ht() -> None:
         material=VacuumMaterial(),
         dtype="float64",
     )
-    simulation.ht.fill(1.0)
+    simulation.ht.fill_(1.0)
 
     derivative = simulation.to_numpy(simulation._radial_derivative_ht())
 
@@ -412,8 +413,8 @@ def test_full_spherical_radial_stencils_satisfy_physical_adjoint_identity() -> N
         dtype="float64",
     )
     generator = np.random.default_rng(20260805)
-    simulation.et[:] = generator.standard_normal(simulation.et.shape)
-    simulation.ht[:] = generator.standard_normal(simulation.ht.shape)
+    simulation.et.copy_(torch.as_tensor(generator.standard_normal(simulation.et.shape)))
+    simulation.ht.copy_(torch.as_tensor(generator.standard_normal(simulation.ht.shape)))
     derivative_et = simulation.to_numpy(simulation._radial_derivative_et())
     derivative_ht = simulation.to_numpy(simulation._radial_derivative_ht())
     ht_weights = (
@@ -423,8 +424,8 @@ def test_full_spherical_radial_stencils_satisfy_physical_adjoint_identity() -> N
         simulation.radial_steps_m * simulation.radial_midpoints_m**2
     )
 
-    left = np.sum(simulation.ht * derivative_et * ht_weights[None, :])
-    right = np.sum(simulation.et * derivative_ht * et_weights[None, :])
+    left = np.sum(simulation.to_numpy(simulation.ht) * derivative_et * ht_weights[None, :])
+    right = np.sum(simulation.to_numpy(simulation.et) * derivative_ht * et_weights[None, :])
 
     assert abs(left + right) <= 2.0e-15 * max(abs(left), abs(right))
 
@@ -441,8 +442,8 @@ def test_full_spherical_metric_annihilates_inverse_radius_profiles() -> None:
         material=VacuumMaterial(),
         dtype="float64",
     )
-    simulation.et[:] = 1.0 / simulation.radial_midpoints_m[None, :]
-    simulation.ht[:] = 1.0 / simulation.radii_m[None, :]
+    simulation.et.copy_(torch.as_tensor(1.0 / simulation.radial_midpoints_m[None, :]))
+    simulation.ht.copy_(torch.as_tensor(1.0 / simulation.radii_m[None, :]))
 
     derivative_et = simulation.to_numpy(simulation._radial_derivative_et())
     derivative_ht = simulation.to_numpy(simulation._radial_derivative_ht())
@@ -455,7 +456,7 @@ def test_full_spherical_metric_annihilates_inverse_radius_profiles() -> None:
         material=VacuumMaterial(),
         dtype="float64",
     )
-    thin_shell.et[:] = 1.0 / thin_shell.radial_midpoints_m[None, :]
+    thin_shell.et.copy_(torch.as_tensor(1.0 / thin_shell.radial_midpoints_m[None, :]))
     thin_derivative = thin_shell.to_numpy(thin_shell._radial_derivative_et())
     assert np.max(np.abs(thin_derivative[:, 1:-1])) > 2.0e-14
 
@@ -476,11 +477,11 @@ def test_graded_nonuniform_grid_remains_bounded_at_cfl_limit() -> None:
         dtype="float64",
     )
     generator = np.random.default_rng(20260805)
-    simulation.er[:] = generator.standard_normal(simulation.er.shape)
-    simulation.et[:] = generator.standard_normal(simulation.et.shape)
+    simulation.er.copy_(torch.as_tensor(generator.standard_normal(simulation.er.shape)))
+    simulation.et.copy_(torch.as_tensor(generator.standard_normal(simulation.et.shape)))
     initial_maximum = max(
-        float(np.max(np.abs(simulation.er))),
-        float(np.max(np.abs(simulation.et))),
+        float(np.max(np.abs(simulation.to_numpy(simulation.er)))),
+        float(np.max(np.abs(simulation.to_numpy(simulation.et)))),
     )
     maximum = initial_maximum
 
@@ -488,8 +489,8 @@ def test_graded_nonuniform_grid_remains_bounded_at_cfl_limit() -> None:
         simulation.step()
         maximum = max(
             maximum,
-            float(np.max(np.abs(simulation.er))),
-            float(np.max(np.abs(simulation.et))),
+            float(np.max(np.abs(simulation.to_numpy(simulation.er)))),
+            float(np.max(np.abs(simulation.to_numpy(simulation.et)))),
         )
 
     assert np.isfinite(maximum)

@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import torch
 
 from ionosphere_fdtd.data_artifacts import (
     DatasetProvenance,
@@ -17,11 +18,11 @@ from ionosphere_fdtd.plasma import (
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 
 
-class _ArrayBackend:
-    def asarray(self, values):
+class _ArrayRuntime:
+    def as_tensor(self, values):
         return np.asarray(values, dtype=np.float64)
 
-    def index_array(self, values):
+    def index_tensor(self, values):
         return np.asarray(values, dtype=np.int64)
 
     def zeros(self, shape):
@@ -140,7 +141,7 @@ def test_vector_ade_matches_complex_tensor_response() -> None:
     )
     time_step = 1.0e-5
     frequency = 20.0
-    ade = MagnetizedPlasmaADE(one_cell, time_step, _ArrayBackend())
+    ade = MagnetizedPlasmaADE(one_cell, time_step, _ArrayRuntime())
     samples = 100_000
     electric = np.zeros((1, 1, 3))
     current = np.empty((samples, 2))
@@ -175,13 +176,13 @@ def test_solver_couples_vector_plasma_current_and_limits_time_step() -> None:
     plasma = GeodesicFDTD(config, mesh=mesh, plasma=model)
     vacuum = GeodesicFDTD(config, mesh=mesh)
     values = np.random.default_rng(20260820).standard_normal(plasma.et.shape) * 1.0e-6
-    plasma.et[:] = values
-    vacuum.et[:] = values
+    plasma.et.copy_(torch.as_tensor(values))
+    vacuum.et.copy_(torch.as_tensor(values))
 
     plasma._update_electric_fields()
     vacuum._update_electric_fields()
 
-    assert np.max(np.abs(plasma.et - vacuum.et)) > 0.0
+    assert torch.max(torch.abs(plasma.et - vacuum.et)).item() > 0.0
     assert plasma._plasma_coupler.ade.state_bytes > 0
     assert plasma.cfl_time_step_limit_s < vacuum.cfl_time_step_limit_s
     assert plasma.diagnostics()["plasma_species"] == 1
@@ -218,7 +219,6 @@ def test_mesh_plasma_artifact_round_trip_and_corruption_detection(tmp_path) -> N
 def test_torch_compiled_plasma_matches_eager_and_checkpoint_resumes(
     tmp_path,
 ) -> None:
-    pytest.importorskip("torch")
     mesh = build_geodesic_mesh(0)
     model, _ = _model(density_m3=1.0e4, mesh=mesh)
     config = SimulationConfig(
@@ -232,7 +232,6 @@ def test_torch_compiled_plasma_matches_eager_and_checkpoint_resumes(
         config,
         mesh=mesh,
         plasma=model,
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -240,7 +239,6 @@ def test_torch_compiled_plasma_matches_eager_and_checkpoint_resumes(
         config,
         mesh=mesh,
         plasma=model,
-        backend="torch",
         device="cpu",
         dtype="float64",
         compile_step=True,
@@ -249,8 +247,8 @@ def test_torch_compiled_plasma_matches_eager_and_checkpoint_resumes(
     generator = np.random.default_rng(20260820)
     for name in ("er", "et", "hr", "ht"):
         values = generator.standard_normal(getattr(eager, name).shape) * 1.0e-9
-        getattr(eager, name).copy_(eager.backend.asarray(values))
-        getattr(compiled, name).copy_(compiled.backend.asarray(values))
+        getattr(eager, name).copy_(eager._runtime.as_tensor(values))
+        getattr(compiled, name).copy_(compiled._runtime.as_tensor(values))
 
     eager.step(2)
     compiled.step(2)
@@ -264,7 +262,6 @@ def test_torch_compiled_plasma_matches_eager_and_checkpoint_resumes(
         )
     restored = GeodesicFDTD.load_checkpoint(
         eager.save_checkpoint(tmp_path / "plasma-state.npz"),
-        backend="torch",
         device="cpu",
         dtype="float64",
     )

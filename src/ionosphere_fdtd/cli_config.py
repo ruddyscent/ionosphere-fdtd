@@ -19,6 +19,24 @@ def add_config_argument(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def reject_legacy_backend_argument(argv: Sequence[str] | None) -> None:
+    """Fail with migration guidance for the removed CLI selector."""
+
+    arguments = list(argv) if argv is not None else None
+    if arguments is None:
+        import sys
+
+        arguments = sys.argv[1:]
+    if any(
+        argument == "--backend" or argument.startswith("--backend=")
+        for argument in arguments
+    ):
+        raise SystemExit(
+            "--backend was removed; PyTorch is now the only compute runtime. "
+            "Remove the option and select hardware with --device."
+        )
+
+
 def load_toml_from_argv(
     argv: Sequence[str] | None,
 ) -> tuple[Path | None, dict[str, Any]]:
@@ -72,6 +90,11 @@ def apply_toml_defaults(
         for key, value in values.items()
         if not isinstance(value, dict)
     }
+    if "backend" in scalar_values:
+        raise SystemExit(
+            f"TOML key {section}.backend was removed; PyTorch is now the only "
+            "compute runtime. Remove the key and use device/dtype settings."
+        )
     unknown = sorted(set(scalar_values).difference(actions))
     if unknown:
         raise SystemExit(

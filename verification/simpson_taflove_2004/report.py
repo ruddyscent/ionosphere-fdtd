@@ -42,7 +42,7 @@ class ValidationRunSummary:
     radial_support: str
     tangential_interface: str
     tangential_support: str
-    backend: str
+    runtime: str
     device: str
     dtype: str
     compiled: bool
@@ -137,7 +137,7 @@ def write_validation_report(
 | radial support | `{summary.radial_support}` |
 | tangential interface | `{summary.tangential_interface}` |
 | tangential support | `{summary.tangential_support}` |
-| backend | `{summary.backend}` |
+| runtime | `{summary.runtime}` |
 | device | `{summary.device}` |
 | dtype | `{summary.dtype}` |
 | compiled step | `{summary.compiled}` |

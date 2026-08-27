@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import torch
 
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 from ionosphere_fdtd.surface_impedance import (
@@ -8,8 +9,8 @@ from ionosphere_fdtd.surface_impedance import (
 )
 
 
-class _ArrayBackend:
-    def asarray(self, values):
+class _ArrayRuntime:
+    def as_tensor(self, values):
         return np.asarray(values, dtype=np.float64)
 
     def zeros(self, shape):
@@ -61,7 +62,7 @@ def test_ade_harmonic_response_is_causal_passive_and_accurate() -> None:
         model,
         edge_count=1,
         time_step_s=time_step,
-        backend=_ArrayBackend(),
+        runtime=_ArrayRuntime(),
     )
     samples = 50_000
     electric = np.empty(samples)
@@ -124,9 +125,9 @@ def test_high_conductivity_surface_converges_to_lower_pec_curl() -> None:
     et = generator.standard_normal(pec.et.shape)
     ht = generator.standard_normal(pec.ht.shape)
     for simulation in (pec, impedance):
-        simulation.er[:] = er
-        simulation.et[:] = et
-        simulation.ht[:] = ht
+        simulation.er.copy_(torch.as_tensor(er))
+        simulation.et.copy_(torch.as_tensor(et))
+        simulation.ht.copy_(torch.as_tensor(ht))
 
     pec._update_magnetic_fields()
     impedance._update_magnetic_fields()
@@ -141,21 +142,25 @@ def test_surface_impedance_solver_remains_bounded() -> None:
     )
     generator = np.random.default_rng(20260820)
     for name in ("er", "et"):
-        getattr(simulation, name)[:] = (
-            377.0e-9
-            * generator.standard_normal(getattr(simulation, name).shape)
+        getattr(simulation, name).copy_(
+            torch.as_tensor(
+                377.0e-9
+                * generator.standard_normal(getattr(simulation, name).shape)
+            )
         )
     for name in ("hr", "ht"):
-        getattr(simulation, name)[:] = (
-            1.0e-9 * generator.standard_normal(getattr(simulation, name).shape)
+        getattr(simulation, name).copy_(
+            torch.as_tensor(
+                1.0e-9 * generator.standard_normal(getattr(simulation, name).shape)
+            )
         )
-    initial_e = max(np.max(np.abs(simulation.er)), np.max(np.abs(simulation.et)))
-    initial_h = max(np.max(np.abs(simulation.hr)), np.max(np.abs(simulation.ht)))
+    initial_e = max(torch.max(torch.abs(simulation.er)).item(), torch.max(torch.abs(simulation.et)).item())
+    initial_h = max(torch.max(torch.abs(simulation.hr)).item(), torch.max(torch.abs(simulation.ht)).item())
 
     simulation.step(500)
 
-    maximum_e = max(np.max(np.abs(simulation.er)), np.max(np.abs(simulation.et)))
-    maximum_h = max(np.max(np.abs(simulation.hr)), np.max(np.abs(simulation.ht)))
+    maximum_e = max(torch.max(torch.abs(simulation.er)).item(), torch.max(torch.abs(simulation.et)).item())
+    maximum_h = max(torch.max(torch.abs(simulation.hr)).item(), torch.max(torch.abs(simulation.ht)).item())
     assert np.isfinite(maximum_e)
     assert np.isfinite(maximum_h)
     assert maximum_e < 2.0 * initial_e
@@ -164,14 +169,12 @@ def test_surface_impedance_solver_remains_bounded() -> None:
 
 
 def test_torch_compiled_surface_impedance_matches_eager() -> None:
-    pytest.importorskip("torch")
     model = ConductiveHalfSpaceSurface(1.0 / 50.0)
     source = None
     eager = GeodesicFDTD(
         _surface_config(),
         source=source,
         surface_impedance=model,
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -179,7 +182,6 @@ def test_torch_compiled_surface_impedance_matches_eager() -> None:
         _surface_config(),
         source=source,
         surface_impedance=model,
-        backend="torch",
         device="cpu",
         dtype="float64",
         compile_step=True,
@@ -188,8 +190,8 @@ def test_torch_compiled_surface_impedance_matches_eager() -> None:
     generator = np.random.default_rng(20260820)
     for name in ("er", "et", "hr", "ht"):
         values = generator.standard_normal(getattr(eager, name).shape) * 1.0e-9
-        getattr(eager, name).copy_(eager.backend.asarray(values))
-        getattr(compiled, name).copy_(compiled.backend.asarray(values))
+        getattr(eager, name).copy_(eager._runtime.as_tensor(values))
+        getattr(compiled, name).copy_(compiled._runtime.as_tensor(values))
 
     eager.step(4)
     compiled.step(4)

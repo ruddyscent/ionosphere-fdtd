@@ -17,7 +17,7 @@ sampling, and two- and three-dimensional visualization.
 - Configurable materials, sources, anomalies, surface impedance, and plasma ADEs
 - Mesh-bound material artifacts with explicit dataset provenance
 - Two-rank PyTorch/NCCL execution for models that require both local GPUs
-- Portable, versioned checkpoints with cross-backend restart
+- Portable, versioned checkpoints with device-portable restart
 - Surface maps, radial sections, receiver traces, interactive 3-D views, and animations
 - Analytic Maxwell checks and Simpson–Taflove qualitative verification workflows
 
@@ -30,7 +30,7 @@ uv sync
 uv run ionosphere --steps 200
 ```
 
-This first CPU run requires no optional backend or plotting packages. It prints
+This first CPU run requires no optional plotting packages. It prints
 the selected mesh, stable time step, field memory, and finite field maxima.
 
 For repeatable runs, copy the CPU-safe starter configuration and edit it instead
@@ -90,7 +90,7 @@ print(simulation.diagnostics())
 - Verification: [analytic solutions](docs/verification/analytic-solution-benchmarks.md),
   [Simpson–Taflove 2004](docs/verification/simpson-taflove-2004.md), and
   [Simpson–Taflove 2006](docs/verification/simpson-taflove-2006.md)
-- [Backend benchmarks](docs/benchmarks/backend-comparison.md)
+- [Runtime benchmarks](docs/benchmarks/backend-comparison.md)
 - [Refinement strategy](docs/benchmarks/refinement-strategy.md)
 - [Two-GPU scaling](docs/benchmarks/distributed-scaling.md)
 
@@ -103,7 +103,7 @@ curves require author inputs that are not available in the papers.
 ## Development
 
 ```bash
-uv run --extra test --extra visualization --extra pytorch --extra verification pytest -q
+uv run --extra test --extra visualization --extra verification pytest -q
 ```
 
 Verification workflows are kept outside the distributed runtime package and

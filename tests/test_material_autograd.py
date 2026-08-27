@@ -3,7 +3,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+import torch
 
 from ionosphere_fdtd import (  # noqa: E402
     GaussianCurrent,
@@ -68,7 +68,6 @@ def _receiver_loss(
     simulation = GeodesicFDTD(
         _config(),
         source=source,
-        backend="torch",
         device="cpu",
         dtype="float64",
         compile_step=compile_step,
@@ -97,7 +96,6 @@ def test_sampled_material_loss_has_finite_nonzero_gradients(
     simulation = GeodesicFDTD(
         config,
         source=source,
-        backend="torch",
         device="cpu",
         dtype="float64",
         material_tensors=material,
@@ -151,14 +149,12 @@ def test_sampled_tensor_forward_matches_static_material(
     static = GeodesicFDTD(
         config,
         source=source,
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
     tensor = GeodesicFDTD(
         config,
         source=source,
-        backend="torch",
         device="cpu",
         dtype="float64",
         material_tensors=SampledMaterialTensors(
@@ -207,7 +203,6 @@ def test_dtype_normalization_preserves_the_input_graph() -> None:
     material = _sampled_material(sigma, epsilon_r)
     simulation = GeodesicFDTD(
         _config(),
-        backend="torch",
         device="cpu",
         dtype="float64",
         material_tensors=material,
@@ -248,7 +243,7 @@ def test_sampled_material_eager_and_compiled_gradients_match() -> None:
 
 def test_direct_update_coefficients_retain_gradients() -> None:
     template = GeodesicFDTD(
-        _config(), backend="torch", device="cpu", dtype="float64"
+        _config(), device="cpu", dtype="float64"
     )
     inputs = tuple(
         value.detach().clone().requires_grad_()
@@ -264,7 +259,6 @@ def test_direct_update_coefficients_retain_gradients() -> None:
     simulation = GeodesicFDTD(
         _config(),
         source=source,
-        backend="torch",
         device="cpu",
         dtype="float64",
         material_tensors=material,
@@ -303,7 +297,6 @@ def test_sampled_material_tensors_never_enter_numpy(monkeypatch) -> None:
     monkeypatch.setattr(solver_module.np, "asarray", reject_tensor)
     simulation = GeodesicFDTD(
         _config(),
-        backend="torch",
         device="cpu",
         dtype="float64",
         material_tensors=material,
@@ -321,7 +314,6 @@ def test_uniform_compression_requires_broadcast_row_shapes() -> None:
 
     simulation = GeodesicFDTD(
         config,
-        backend="torch",
         device="cpu",
         dtype="float64",
         material_tensors=material,
@@ -358,21 +350,19 @@ def test_invalid_sampled_material_tensors_fail_clearly(
     with pytest.raises(error, match=message):
         GeodesicFDTD(
             _config(),
-            backend="torch",
             device="cpu",
             dtype="float64",
             material_tensors=material,
         )
 
 
-def test_material_tensors_require_torch_backend_and_supported_container() -> None:
+def test_material_tensors_use_default_runtime_and_validate_container() -> None:
     material = _sampled_material(1.0e-8, 2.0)
-    with pytest.raises(ValueError, match="backend='torch'"):
-        GeodesicFDTD(_config(), material_tensors=material)
+    simulation = GeodesicFDTD(_config(), material_tensors=material)
+    assert simulation.er.dtype == torch.float64
     with pytest.raises(TypeError, match="SampledMaterialTensors"):
         GeodesicFDTD(
             _config(),
-            backend="torch",
             device="cpu",
             dtype="float64",
             material_tensors=object(),

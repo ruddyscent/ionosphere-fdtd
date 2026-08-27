@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+import torch
 
 from ionosphere_fdtd._torch_step import (  # noqa: E402
     FieldState,
@@ -20,7 +20,6 @@ def _simulation() -> GeodesicFDTD:
             courant_factor=0.2,
         ),
         source=GaussianCurrent(peak_current_a=1.0e6),
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -170,7 +169,6 @@ def test_receiver_loss_reaches_current_and_waveform_amplitude(
             courant_factor=0.2,
         ),
         source=source,
-        backend="torch",
         device="cpu",
         dtype="float64",
         compile_step=compile_step,
@@ -246,7 +244,7 @@ def test_h_observations_preserve_the_current_graph() -> None:
 def test_observation_export_has_one_explicit_host_copy(monkeypatch) -> None:
     simulation = _simulation()
     calls = 0
-    export_numpy = simulation.backend._runtime.export_numpy
+    export_numpy = simulation._runtime.export_numpy
 
     def counted_export(values):
         nonlocal calls
@@ -254,7 +252,7 @@ def test_observation_export_has_one_explicit_host_copy(monkeypatch) -> None:
         return export_numpy(values)
 
     monkeypatch.setattr(
-        simulation.backend._runtime, "export_numpy", counted_export
+        simulation._runtime, "export_numpy", counted_export
     )
     traces = simulation.record_er_observations(
         *_er_receiver(simulation), 2
@@ -279,7 +277,6 @@ def test_external_currents_require_a_source_and_one_value_per_step() -> None:
             radial_cells=2,
             courant_factor=0.2,
         ),
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -330,7 +327,7 @@ def test_observation_synchronization_is_opt_in(monkeypatch) -> None:
         nonlocal calls
         calls += 1
 
-    monkeypatch.setattr(simulation.backend, "synchronize", counted_synchronize)
+    monkeypatch.setattr(simulation._runtime, "synchronize", counted_synchronize)
 
     simulation.record_er_observations(*_er_receiver(simulation), 2)
     assert calls == 0

@@ -155,7 +155,7 @@ for every supported physics configuration.
 Reproduce the maintained generic inventory with:
 
 ```bash
-uv run --extra pytorch python -m benchmarks.torch_allocations \
+uv run python -m benchmarks.torch_allocations \
   --device cuda --subdivision 4 --radial-cells 40 \
   --dtype float32 --steps 8 --warmup-steps 4 \
   --output allocations.json
@@ -207,7 +207,7 @@ Use the isolated-worker scaling benchmark for crossover analysis across mesh
 and radial sizes:
 
 ```bash
-uv run --extra pytorch python -m benchmarks.backend_scaling \
+uv run python -m benchmarks.backend_scaling \
   --subdivisions 2,3,4,5,6,7 \
   --radial-cells-list 16,40,80 \
   --dtypes float32,float64 \

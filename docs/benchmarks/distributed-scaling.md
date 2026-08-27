@@ -53,7 +53,7 @@ and
 Run the eager case:
 
 ```bash
-uv run --extra pytorch torchrun --standalone --nproc-per-node=2 \
+uv run torchrun --standalone --nproc-per-node=2 \
   -m benchmarks.distributed_scaling \
   --subdivision 6 --radial-cells 40 \
   --steps 100 --warmup-steps 20 --repeats 3 \

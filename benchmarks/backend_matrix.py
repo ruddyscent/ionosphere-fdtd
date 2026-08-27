@@ -1,4 +1,4 @@
-"""Compare NumPy and PyTorch FDTD step throughput across available devices."""
+"""Measure PyTorch FDTD throughput across available compute devices."""
 
 from __future__ import annotations
 
@@ -11,14 +11,15 @@ import resource
 from time import perf_counter
 
 import numpy as np
+import torch
 
-from ionosphere_fdtd.backends import BackendUnavailableError
+from ionosphere_fdtd import BackendUnavailableError
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 
 
 @dataclass(frozen=True, slots=True)
-class BackendResult:
-    backend: str
+class RuntimeResult:
+    runtime: str
     device: str
     dtype: str
     compiled: bool
@@ -53,17 +54,12 @@ def run_backend_matrix(
     torch_compile: bool = False,
     torch_compile_chunk_size: int = 8,
 ) -> dict[str, object]:
+    """Run the retained legacy entry point as a PyTorch device matrix."""
+
     if min(steps, repeats, torch_compile_chunk_size) < 1 or warmup_steps < 0:
         raise ValueError("steps/repeats must be positive and warmup nonnegative")
-    configurations = (
-        ("numpy", "cpu"),
-        ("torch", "cpu"),
-        ("torch", "cuda"),
-        ("torch", "mps"),
-    )
     results = [
         _measure(
-            backend,
             device,
             subdivision=subdivision,
             radial_cells=radial_cells,
@@ -71,10 +67,10 @@ def run_backend_matrix(
             warmup_steps=warmup_steps,
             repeats=repeats,
             dtype=dtype,
-            compile_step=torch_compile and backend == "torch",
+            compile_step=torch_compile,
             compile_chunk_size=torch_compile_chunk_size,
         )
-        for backend, device in configurations
+        for device in ("cpu", "cuda", "mps")
     ]
     return {
         "system": {
@@ -82,7 +78,7 @@ def run_backend_matrix(
             "processor": platform.processor(),
             "python": platform.python_version(),
             "numpy": np.__version__,
-            "torch": _torch_version(),
+            "torch": torch.__version__,
         },
         "configuration": {
             "subdivision": subdivision,
@@ -99,7 +95,6 @@ def run_backend_matrix(
 
 
 def _measure(
-    backend,
     device,
     *,
     subdivision,
@@ -123,17 +118,16 @@ def _measure(
                 courant_factor=0.35,
             ),
             material=VacuumMaterial(),
-            backend=backend,
             device=device,
             dtype=dtype,
             compile_step=compile_step,
             compile_chunk_size=compile_chunk_size,
         )
         _initialize_fields(simulation)
-        simulation.backend.synchronize()
-    except (BackendUnavailableError, ImportError, RuntimeError) as error:
-        return BackendResult(
-            backend, device, dtype, compile_step, compile_chunk_size, "unavailable",
+        simulation._runtime.synchronize()
+    except (BackendUnavailableError, RuntimeError) as error:
+        return RuntimeResult(
+            "torch", device, dtype, compile_step, compile_chunk_size, "unavailable",
             None, None, None, None, None, None, _peak_process_memory_bytes(),
             _peak_device_memory_bytes(device), str(error),
         )
@@ -142,25 +136,22 @@ def _measure(
     if compile_step:
         compile_started = perf_counter()
         simulation.step(compile_chunk_size)
-        simulation.backend.synchronize()
+        simulation._runtime.synchronize()
         compile_seconds = perf_counter() - compile_started
     if warmup_steps:
         simulation.step(warmup_steps)
-        simulation.backend.synchronize()
+        simulation._runtime.synchronize()
     elapsed = []
     for _ in range(repeats):
         started = perf_counter()
         simulation.step(steps)
-        simulation.backend.synchronize()
+        simulation._runtime.synchronize()
         elapsed.append(perf_counter() - started)
     median = float(np.median(elapsed))
-    memory = sum(
-        simulation.backend.nbytes(getattr(simulation, field))
-        for field in ("er", "et", "hr", "ht")
-    )
-    return BackendResult(
-        backend,
-        simulation.backend.device,
+    device_name = str(simulation.device)
+    return RuntimeResult(
+        simulation.runtime,
+        device_name,
         dtype,
         compile_step,
         compile_chunk_size,
@@ -169,10 +160,10 @@ def _measure(
         compile_seconds,
         median,
         steps / median,
-        memory,
-        simulation.persistent_backend_bytes,
+        simulation.memory_bytes,
+        simulation.persistent_runtime_bytes,
         _peak_process_memory_bytes(),
-        _peak_device_memory_bytes(simulation.backend.device),
+        _peak_device_memory_bytes(device_name),
     )
 
 
@@ -180,15 +171,7 @@ def _initialize_fields(simulation):
     generator = np.random.default_rng(20260814)
     for field in ("er", "et", "hr", "ht"):
         values = generator.standard_normal(getattr(simulation, field).shape) * 1.0e-6
-        getattr(simulation, field)[:] = simulation.backend.asarray(values)
-
-
-def _torch_version():
-    try:
-        import torch
-    except ImportError:
-        return None
-    return torch.__version__
+        getattr(simulation, field)[:] = simulation._runtime.as_tensor(values)
 
 
 def _peak_process_memory_bytes() -> int:
@@ -197,28 +180,21 @@ def _peak_process_memory_bytes() -> int:
 
 
 def _reset_device_peak_memory(device: str) -> None:
-    if not device.startswith("cuda"):
+    if not device.startswith("cuda") or not torch.cuda.is_available():
         return
     try:
-        import torch
-
-        if torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats(device)
-    except (ImportError, RuntimeError, ValueError):
+        torch.cuda.reset_peak_memory_stats(device)
+    except (RuntimeError, ValueError):
         pass
 
 
 def _peak_device_memory_bytes(device: str) -> int | None:
-    if not device.startswith("cuda"):
+    if not device.startswith("cuda") or not torch.cuda.is_available():
         return None
     try:
-        import torch
-
-        if torch.cuda.is_available():
-            return int(torch.cuda.max_memory_allocated(device))
-    except (ImportError, RuntimeError, ValueError):
-        pass
-    return None
+        return int(torch.cuda.max_memory_allocated(device))
+    except (RuntimeError, ValueError):
+        return None
 
 
 def main(argv: list[str] | None = None) -> int:

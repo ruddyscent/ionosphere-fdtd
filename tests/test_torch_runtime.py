@@ -2,13 +2,13 @@ import warnings
 
 import numpy as np
 import pytest
+import torch
 
 from ionosphere_fdtd._torch_runtime import _TorchRuntime
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 
 
 def test_existing_tensor_normalization_preserves_graph() -> None:
-    torch = pytest.importorskip("torch")
     runtime = _TorchRuntime(device="cpu", dtype="float64")
     leaf = torch.asarray([1.0, 2.0], dtype=torch.float64).requires_grad_()
     derived = leaf.square()
@@ -22,7 +22,6 @@ def test_existing_tensor_normalization_preserves_graph() -> None:
 
 
 def test_existing_tensor_cast_preserves_gradient_history() -> None:
-    torch = pytest.importorskip("torch")
     runtime = _TorchRuntime(device="cpu", dtype="float64")
     leaf = torch.asarray([1.0, 2.0], dtype=torch.float32).requires_grad_()
 
@@ -35,7 +34,6 @@ def test_existing_tensor_cast_preserves_gradient_history() -> None:
 
 
 def test_host_and_index_inputs_inherit_the_runtime_context() -> None:
-    torch = pytest.importorskip("torch")
     runtime = _TorchRuntime(device="cpu", dtype="float64")
 
     values = runtime.as_tensor(np.asarray([1.0, 2.0], dtype=np.float32))
@@ -50,7 +48,6 @@ def test_host_and_index_inputs_inherit_the_runtime_context() -> None:
 
 
 def test_read_only_numpy_inputs_are_normalized_without_alias_warnings() -> None:
-    torch = pytest.importorskip("torch")
     runtime = _TorchRuntime(device="cpu", dtype="float64")
     values = np.asarray([1.0, 2.0], dtype=np.float64)
     indices = np.asarray([0, 1], dtype=np.int64)
@@ -69,7 +66,6 @@ def test_read_only_numpy_inputs_are_normalized_without_alias_warnings() -> None:
 
 
 def test_numpy_export_is_an_explicit_terminal_detach_boundary() -> None:
-    torch = pytest.importorskip("torch")
     runtime = _TorchRuntime(device="cpu", dtype="float64")
     leaf = torch.asarray([1.0, 2.0], dtype=torch.float64).requires_grad_()
     derived = 4.0 * leaf
@@ -82,12 +78,10 @@ def test_numpy_export_is_an_explicit_terminal_detach_boundary() -> None:
 
 
 def test_simulation_exposes_canonical_torch_context() -> None:
-    torch = pytest.importorskip("torch")
     simulation = GeodesicFDTD(
         config=SimulationConfig(
             subdivision=0, radial_cells=4, courant_factor=0.2
         ),
-        backend="torch",
         device="cpu",
         dtype="float64",
     )
@@ -100,27 +94,25 @@ def test_simulation_exposes_canonical_torch_context() -> None:
         simulation.et,
         simulation.hr,
         simulation.ht,
-        simulation.backend.face_edge_signs,
+        simulation._runtime.face_edge_signs,
     ):
         assert values.device == simulation.device
         assert values.dtype is simulation.dtype
     for indices in (
-        simulation.backend.edges,
-        simulation.backend.face_edges,
-        simulation.backend.edge_left_faces,
-        simulation.backend.edge_right_faces,
+        simulation._runtime.edges,
+        simulation._runtime.face_edges,
+        simulation._runtime.edge_left_faces,
+        simulation._runtime.edge_right_faces,
     ):
         assert indices.device == simulation.device
         assert indices.dtype is torch.long
 
 
 def test_simulation_auto_device_matches_allocated_fields() -> None:
-    torch = pytest.importorskip("torch")
     simulation = GeodesicFDTD(
         config=SimulationConfig(
             subdivision=0, radial_cells=4, courant_factor=0.2
         ),
-        backend="torch",
         device="auto",
     )
 

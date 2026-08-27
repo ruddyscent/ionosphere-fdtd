@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import torch
 
 from ionosphere_fdtd.radial_grid import (
     RadialRefinementRegion,
@@ -72,13 +73,13 @@ def test_balanced_radial_grid_runs_stably_at_cfl_limit() -> None:
         dtype="float64",
     )
     generator = np.random.default_rng(20260820)
-    simulation.er[:] = generator.standard_normal(simulation.er.shape)
-    simulation.et[:] = generator.standard_normal(simulation.et.shape)
-    initial = max(np.max(np.abs(simulation.er)), np.max(np.abs(simulation.et)))
+    simulation.er.copy_(torch.as_tensor(generator.standard_normal(simulation.er.shape)))
+    simulation.et.copy_(torch.as_tensor(generator.standard_normal(simulation.et.shape)))
+    initial = max(np.max(np.abs(simulation.to_numpy(simulation.er))), np.max(np.abs(simulation.to_numpy(simulation.et))))
 
     simulation.step(1_000)
 
-    maximum = max(np.max(np.abs(simulation.er)), np.max(np.abs(simulation.et)))
+    maximum = max(np.max(np.abs(simulation.to_numpy(simulation.er))), np.max(np.abs(simulation.to_numpy(simulation.et))))
     assert np.isfinite(maximum)
     assert maximum < 2.0 * initial
 

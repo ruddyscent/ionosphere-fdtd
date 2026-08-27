@@ -7,13 +7,14 @@ from pathlib import Path
 
 import numpy as np
 
-from .backends import BackendUnavailableError
+from ._torch_runtime import BackendUnavailableError
 from .checkpoint import CheckpointError
 from .cli_common import DefaultsHelpFormatter, add_version_argument
 from .cli_config import (
     add_config_argument,
     apply_toml_defaults,
     load_toml_from_argv,
+    reject_legacy_backend_argument,
     table,
     validate_nested_tables,
     validate_root_sections,
@@ -54,21 +55,15 @@ def _parser() -> argparse.ArgumentParser:
         help="also update --checkpoint after this many completed steps",
     )
     parser.add_argument(
-        "--backend",
-        choices=("numpy", "torch"),
-        default="numpy",
-        help="array implementation",
-    )
-    parser.add_argument(
         "--device",
-        default="auto",
-        help="compute device: auto, cpu, mps, cuda, cuda:N, or gpu",
+        default="cpu",
+        help="PyTorch device: cpu, auto, mps, cuda, cuda:N, or gpu",
     )
     parser.add_argument(
         "--dtype",
         choices=("auto", "float32", "float64"),
-        default="auto",
-        help="field precision; auto selects the backend default",
+        default="float64",
+        help="PyTorch field precision",
     )
     parser.add_argument(
         "--torch-compile",
@@ -171,6 +166,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    reject_legacy_backend_argument(argv)
     parser = _parser()
     _, document = load_toml_from_argv(argv)
     validate_root_sections(document, allowed={"ionosphere", "visualization"})
@@ -229,7 +225,6 @@ def main(argv: list[str] | None = None) -> int:
         if args.resume is not None:
             simulation = GeodesicFDTD.load_checkpoint(
                 args.resume,
-                backend=args.backend,
                 device=args.device,
                 dtype=None if args.dtype == "auto" else args.dtype,
                 compile_step=args.torch_compile,
@@ -257,7 +252,6 @@ def main(argv: list[str] | None = None) -> int:
                     center_time_s=args.source_center,
                     one_over_e_half_width_s=args.source_width,
                 ),
-                backend=args.backend,
                 device=args.device,
                 dtype=args.dtype,
                 compile_step=args.torch_compile,
@@ -295,13 +289,11 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(simulation.radial_steps_m)} radial cells"
     )
     thread_text = (
-        f" threads={simulation.backend.threads}"
-        if simulation.backend.threads is not None
-        else ""
+        f" threads={simulation.threads}" if simulation.threads is not None else ""
     )
     print(
-        f"backend={simulation.backend.name} device={simulation.backend.device} "
-        f"dtype={simulation.backend.dtype_name}{thread_text} "
+        f"runtime={simulation.runtime} device={simulation.device} "
+        f"dtype={simulation.dtype_name}{thread_text} "
         f"compiled={simulation.compiled} "
         f"compile_chunk_size={simulation.compile_chunk_size}; "
         f"dt={simulation.time_step_s:.6e} s "

@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from .backends import ArrayBackend, create_backend
+from ._torch_runtime import _TorchRuntime
 from .constants import C_0, EARTH_RADIUS_M, EPSILON_0, MU_0
 from .materials import (
     EarthIonosphereMaterial,
@@ -224,9 +224,8 @@ class GeodesicFDTD:
         surface_impedance: ConductiveHalfSpaceSurface | None = None,
         plasma: MeshPlasmaModel | None = None,
         mesh: GeodesicMesh | None = None,
-        backend: str = "numpy",
-        device: str = "auto",
-        dtype: str = "auto",
+        device: str = "cpu",
+        dtype: str = "float64",
         compile_step: bool = False,
         compile_chunk_size: int = 8,
         torch_threads: int | None = None,
@@ -277,12 +276,11 @@ class GeodesicFDTD:
             and self.mesh.subdivision != self.config.subdivision
         ):
             raise ValueError("provided mesh subdivision does not match config")
-        self.backend: ArrayBackend = create_backend(
-            backend,
+        self._runtime = _TorchRuntime(
             self.mesh,
             device=device,
             dtype=dtype,
-            torch_threads=torch_threads,
+            threads=torch_threads,
         )
         self.material = material or EarthIonosphereMaterial()
         self.source = source
@@ -334,12 +332,12 @@ class GeodesicFDTD:
                 static_data.anomaly_horizontal_fractions_et
             )
 
-        self.er = self.backend.zeros((self.mesh.n_vertices, len(self.radii_m)))
-        self.ht = self.backend.zeros((self.mesh.n_edges, len(self.radii_m)))
-        self.et = self.backend.zeros(
+        self.er = self._runtime.zeros((self.mesh.n_vertices, len(self.radii_m)))
+        self.ht = self._runtime.zeros((self.mesh.n_edges, len(self.radii_m)))
+        self.et = self._runtime.zeros(
             (self.mesh.n_edges, len(self.radial_midpoints_m))
         )
-        self.hr = self.backend.zeros(
+        self.hr = self._runtime.zeros(
             (self.mesh.n_faces, len(self.radial_midpoints_m))
         )
         self._surface_impedance_ade = (
@@ -347,7 +345,7 @@ class GeodesicFDTD:
                 surface_impedance,
                 edge_count=self.mesh.n_edges,
                 time_step_s=self.time_step_s,
-                backend=self.backend,
+                runtime=self._runtime,
             )
             if surface_impedance is not None
             else None
@@ -358,7 +356,7 @@ class GeodesicFDTD:
                 self.mesh,
                 self.radial_midpoint_altitudes_m,
                 self.time_step_s,
-                self.backend,
+                self._runtime,
             )
             if plasma is not None
             else None
@@ -372,16 +370,16 @@ class GeodesicFDTD:
         if static_data.tangential_source_distribution is not None:
             edges, layers, weights = static_data.tangential_source_distribution
             self._tangential_source_distribution = (
-                self.backend.index_array(edges),
-                self.backend.index_array(layers),
-                self.backend.asarray(weights),
+                self._runtime.index_tensor(edges),
+                self._runtime.index_tensor(layers),
+                self._runtime.as_tensor(weights),
             )
         elif static_data.source_distribution is not None:
             vertices, layers, weights = static_data.source_distribution
             self._source_distribution = (
-                self.backend.index_array(vertices),
-                self.backend.index_array(layers),
-                self.backend.asarray(weights),
+                self._runtime.index_tensor(vertices),
+                self._runtime.index_tensor(layers),
+                self._runtime.as_tensor(weights),
             )
         self.time_s = 0.0
         self.steps = 0
@@ -390,14 +388,6 @@ class GeodesicFDTD:
 
     def _prepare_optional_physics_coefficients(self) -> None:
         """Validate tensor-native ADE coefficients and preserve their graphs."""
-
-        if (
-            self.surface_impedance_tensors is not None
-            or self.plasma_tensors is not None
-        ) and self.backend.name != "torch":
-            raise ValueError(
-                "optional-physics tensor coefficients require backend='torch'"
-            )
 
         if self.surface_impedance_tensors is not None:
             if self._surface_impedance_ade is None:
@@ -514,19 +504,6 @@ class GeodesicFDTD:
     def _initialize_field_stepper(self, compile_step: bool) -> None:
         """Configure the existing NumPy or functional PyTorch recurrence."""
 
-        if self.backend.name != "torch":
-            self._field_step = (
-                self.backend.compile_step(self._advance_fields)
-                if compile_step
-                else self._advance_fields
-            )
-            self._field_chunk = (
-                self.backend.compile_step(self._advance_field_chunk)
-                if compile_step
-                else self._advance_field_chunk
-            )
-            return
-
         from ._torch_step import (
             FieldState,
             FieldStepParameters,
@@ -569,13 +546,13 @@ class GeodesicFDTD:
             compress_uniform_material_coefficients=(
                 self.config.compress_uniform_material_coefficients
             ),
-            edges=self.backend.edges,
-            face_edges=self.backend.face_edges,
-            face_edge_signs=self.backend.face_edge_signs,
-            edge_left_faces=self.backend.edge_left_faces,
-            edge_right_faces=self.backend.edge_right_faces,
-            vertex_edges=self.backend.vertex_edges,
-            vertex_edge_signs=self.backend.vertex_edge_signs,
+            edges=self._runtime.edges,
+            face_edges=self._runtime.face_edges,
+            face_edge_signs=self._runtime.face_edge_signs,
+            edge_left_faces=self._runtime.edge_left_faces,
+            edge_right_faces=self._runtime.edge_right_faces,
+            vertex_edges=self._runtime.vertex_edges,
+            vertex_edge_signs=self._runtime.vertex_edge_signs,
             primal_edge_angles=self._primal_edge_angles,
             inverse_primal_edge_angles=self._inverse_primal_edge_angles,
             dual_edge_angles=self._dual_edge_angles,
@@ -652,7 +629,7 @@ class GeodesicFDTD:
             surface_parameters is not None or plasma_parameters is not None
         )
 
-        runtime = self.backend._runtime
+        runtime = self._runtime
         if self._has_optional_physics:
             self._tensor_optional_physics_step = (
                 runtime.compile(advance_optional_physics)
@@ -723,46 +700,46 @@ class GeodesicFDTD:
         # Spherical metric tensors are separable into horizontal angles and
         # radial factors. Keeping those factors one-dimensional avoids several
         # dense edge-by-layer and face-by-layer arrays on the accelerator.
-        self._primal_edge_angles = self.backend.asarray(
+        self._primal_edge_angles = self._runtime.as_tensor(
             self.mesh.primal_edge_angles[:, None]
         )
-        self._inverse_primal_edge_angles = self.backend.asarray(
+        self._inverse_primal_edge_angles = self._runtime.as_tensor(
             1.0 / self.mesh.primal_edge_angles[:, None]
         )
-        self._dual_edge_angles = self.backend.asarray(
+        self._dual_edge_angles = self._runtime.as_tensor(
             self.mesh.dual_edge_angles[:, None]
         )
-        self._inverse_dual_edge_angles = self.backend.asarray(
+        self._inverse_dual_edge_angles = self._runtime.as_tensor(
             1.0 / self.mesh.dual_edge_angles[:, None]
         )
-        self._inverse_dual_cell_solid_angles = self.backend.asarray(
+        self._inverse_dual_cell_solid_angles = self._runtime.as_tensor(
             1.0 / self.mesh.dual_cell_solid_angles[:, None]
         )
-        self._inverse_face_solid_angles = self.backend.asarray(
+        self._inverse_face_solid_angles = self._runtime.as_tensor(
             1.0 / self.mesh.face_solid_angles[:, None]
         )
-        self._radii = self.backend.asarray(self.radii_m)
-        self._inverse_radii = self.backend.asarray(1.0 / self.radii_m[None, :])
-        self._radial_midpoints = self.backend.asarray(self.radial_midpoints_m)
-        self._inverse_radial_midpoints = self.backend.asarray(
+        self._radii = self._runtime.as_tensor(self.radii_m)
+        self._inverse_radii = self._runtime.as_tensor(1.0 / self.radii_m[None, :])
+        self._radial_midpoints = self._runtime.as_tensor(self.radial_midpoints_m)
+        self._inverse_radial_midpoints = self._runtime.as_tensor(
             1.0 / self.radial_midpoints_m[None, :]
         )
-        self._radial_steps = self.backend.asarray(self.radial_steps_m)
-        self._radial_node_control_lengths = self.backend.asarray(
+        self._radial_steps = self._runtime.as_tensor(self.radial_steps_m)
+        self._radial_node_control_lengths = self._runtime.as_tensor(
             self.radial_node_control_lengths_m
         )
-        self._radial_center_distances = self.backend.asarray(
+        self._radial_center_distances = self._runtime.as_tensor(
             self.radial_midpoints_m[1:] - self.radial_midpoints_m[:-1]
         )
     def _radial_derivative_et(self) -> Any:
         values = self.et
         if self.config.geometry_mode == "full-spherical":
             values = values * self._radial_midpoints[None, :]
-        result = self.backend.empty_like(self.ht)
+        result = self._runtime.empty_like(self.ht)
         result[:, 0] = 2.0 * values[:, 0] / self._radial_steps[0]
         result[:, -1] = -2.0 * values[:, -1] / self._radial_steps[-1]
         if self.ht.shape[1] > 2:
-            result[:, 1:-1] = self.backend.diff(
+            result[:, 1:-1] = self._runtime.diff(
                 values, axis=1
             ) / self._radial_center_distances
         if self.config.geometry_mode == "full-spherical":
@@ -773,7 +750,7 @@ class GeodesicFDTD:
         values = self.ht
         if self.config.geometry_mode == "full-spherical":
             values = values * self._radii[None, :]
-        result = self.backend.diff(values, axis=1) / self._radial_steps[None, :]
+        result = self._runtime.diff(values, axis=1) / self._radial_steps[None, :]
         if self.config.geometry_mode == "full-spherical":
             result *= self._inverse_radial_midpoints
         return result
@@ -1029,16 +1006,14 @@ class GeodesicFDTD:
         ca_er, cb_er, ca_et, cb_et = _host_material_update_coefficients(
             static_data, self.config
         )
-        self._ca_er = self.backend.asarray(ca_er)
-        self._cb_er = self.backend.asarray(cb_er)
-        self._ca_et = self.backend.asarray(ca_et)
-        self._cb_et = self.backend.asarray(cb_et)
+        self._ca_er = self._runtime.as_tensor(ca_er)
+        self._cb_er = self._runtime.as_tensor(cb_er)
+        self._ca_et = self._runtime.as_tensor(ca_et)
+        self._cb_et = self._runtime.as_tensor(cb_et)
 
     def _prepare_tensor_material_coefficients(self) -> None:
         """Validate tensor-native material inputs and retain their graph."""
 
-        if self.backend.name != "torch":
-            raise ValueError("material_tensors requires backend='torch'")
         er_shape, et_shape = self._material_tensor_shapes()
         tensors = self.material_tensors
         if isinstance(tensors, SampledMaterialTensors):
@@ -1154,14 +1129,14 @@ class GeodesicFDTD:
     ) -> Any:
         """Normalize one floating Torch tensor without copying it through NumPy."""
 
-        torch = self.backend.torch
+        torch = self._runtime.torch
         if not torch.is_tensor(values):
             raise TypeError(f"material_tensors.{name} must be a PyTorch tensor")
         if not torch.is_floating_point(values):
             raise TypeError(
                 f"material_tensors.{name} must have a floating-point dtype"
             )
-        tensor = self.backend.asarray(values)
+        tensor = self._runtime.as_tensor(values)
         if tuple(tensor.shape) != expected_shape:
             raise ValueError(
                 f"material_tensors.{name} must have shape {expected_shape}"
@@ -1192,12 +1167,12 @@ class GeodesicFDTD:
     ) -> Any:
         """Normalize one floating Torch coefficient without severing its graph."""
 
-        torch = self.backend.torch
+        torch = self._runtime.torch
         if not torch.is_tensor(values):
             raise TypeError(f"{name} must be a PyTorch tensor")
         if not torch.is_floating_point(values):
             raise TypeError(f"{name} must have a floating-point dtype")
-        tensor = self.backend.asarray(values)
+        tensor = self._runtime.as_tensor(values)
         if tuple(tensor.shape) != expected_shape:
             raise ValueError(f"{name} must have shape {expected_shape}")
         if not bool(torch.isfinite(tensor).all()):
@@ -1218,7 +1193,7 @@ class GeodesicFDTD:
     ) -> tuple[Any, Any]:
         """Differentiably integrate conductive decay, including zero loss."""
 
-        torch = self.backend.torch
+        torch = self._runtime.torch
         rate = sigma * self.time_step_s / epsilon
         decay = torch.exp(-rate)
         small = torch.abs(rate) < 1.0e-4
@@ -1333,20 +1308,18 @@ class GeodesicFDTD:
         cls,
         path: str | Path,
         *,
-        backend: str = "numpy",
-        device: str = "auto",
+        device: str = "cpu",
         dtype: str | None = None,
         compile_step: bool = False,
         compile_chunk_size: int = 8,
         torch_threads: int | None = None,
     ) -> GeodesicFDTD:
-        """Restore a checkpoint, optionally on a different backend or device."""
+        """Restore a checkpoint on the selected PyTorch device and dtype."""
 
         from .checkpoint import load_checkpoint
 
         return load_checkpoint(
             path,
-            backend=backend,
             device=device,
             dtype=dtype,
             compile_step=compile_step,
@@ -1360,34 +1333,19 @@ class GeodesicFDTD:
         if currents is not None:
             if self.source is None:
                 raise ValueError("source currents require a configured source")
-            values = self.backend.asarray(currents)
+            values = self._runtime.as_tensor(currents)
             if values.ndim != 1 or values.shape[0] != count:
                 raise ValueError(f"currents must have shape ({count},)")
             return values
         if self.source is None:
-            return self.backend.zeros((count,))
-        if self.backend.name == "torch":
-            offsets = self.backend.torch.arange(
-                count,
-                dtype=self.backend.dtype,
-                device=self.backend.torch_device,
-            )
-            times_s = (self.steps + offsets + 0.5) * self.time_step_s
-            return self.source.current_tensor_a(
-                times_s, self.time_step_s
-            )
-        values = np.fromiter(
-            (
-                self.source.current_a(
-                    (self.steps + offset + 0.5) * self.time_step_s,
-                    self.time_step_s,
-                )
-                for offset in range(count)
-            ),
-            dtype=np.float64,
-            count=count,
+            return self._runtime.zeros((count,))
+        offsets = self._runtime.torch.arange(
+            count,
+            dtype=self._runtime.dtype,
+            device=self._runtime.device,
         )
-        return self.backend.asarray(values)
+        times_s = (self.steps + offsets + 0.5) * self.time_step_s
+        return self.source.current_tensor_a(times_s, self.time_step_s)
 
     def _torch_field_state(self) -> Any:
         """Return the current fields as a tensor pytree without copying."""
@@ -1519,143 +1477,25 @@ class GeodesicFDTD:
             self._advance_fields(currents[offset])
 
     def _update_magnetic_fields(self) -> None:
-        if self.backend.name == "torch":
-            state = self._torch_field_state()
-            state = self._advance_magnetic_state(
-                state,
-                self._field_step_parameters,
-                self._torch_lower_boundary_ht(state),
-            )
-            self._set_torch_field_state(state)
-            return
-
-        surface_gradient_er = self.backend.edge_difference(self.er)
-        surface_gradient_er *= self._inverse_primal_edge_angles
-        surface_gradient_er *= self._inverse_radii
-        lower_surface_gradient = (
-            surface_gradient_er[:, 0] + 0.0
-            if self._surface_impedance_ade is not None
-            else None
+        state = self._torch_field_state()
+        state = self._advance_magnetic_state(
+            state,
+            self._field_step_parameters,
+            self._torch_lower_boundary_ht(state),
         )
-        lower_h_old = (
-            self.ht[:, 0] + 0.0
-            if self._surface_impedance_ade is not None
-            else None
-        )
-
-        # The default odd Et ghosts place zero tangential electric field at
-        # both radial boundaries. A lower surface ADE overwrites its Ht update
-        # below; the upper boundary remains PEC.
-        radial_derivative_et = self._radial_derivative_et()
-
-        surface_gradient_er -= radial_derivative_et
-        surface_gradient_er *= self.time_step_s / MU_0
-        self.ht += surface_gradient_er
-        if self._surface_impedance_ade is not None:
-            boundary_metric = (
-                self.radial_midpoints_m[0] / self.radii_m[0]
-                if self.config.geometry_mode == "full-spherical"
-                else 1.0
-            )
-            self.ht[:, 0] = self._surface_impedance_ade.advance_lower_boundary(
-                lower_h_old,
-                boundary_metric * self.et[:, 0],
-                lower_surface_gradient,
-                self._radial_steps[0],
-                self.time_step_s,
-            )
-        del surface_gradient_er, radial_derivative_et
-
-        electric_circulation = self.backend.face_circulation(
-            self.et * self._primal_edge_angles
-        )
-        electric_circulation *= self._inverse_face_solid_angles
-        electric_circulation *= self._inverse_radial_midpoints
-        electric_circulation *= self.time_step_s / MU_0
-        self.hr -= electric_circulation
+        self._set_torch_field_state(state)
 
     def _update_electric_fields(self, current_a: Any = 0.0) -> None:
-        if self.backend.name == "torch":
-            state = self._torch_field_state()
-            radial_plasma, tangential_plasma = self._torch_plasma_currents(
-                state
-            )
-            state = self._advance_electric_state(
-                state,
-                self._field_step_parameters,
-                current_a,
-                radial_plasma,
-                tangential_plasma,
-            )
-            self._set_torch_field_state(state)
-            return
-
-        plasma_current = (
-            self._plasma_coupler.advance(self.er, self.et)
-            if self._plasma_coupler is not None
-            else None
+        state = self._torch_field_state()
+        radial_plasma, tangential_plasma = self._torch_plasma_currents(state)
+        state = self._advance_electric_state(
+            state,
+            self._field_step_parameters,
+            current_a,
+            radial_plasma,
+            tangential_plasma,
         )
-        magnetic_circulation = self.backend.dual_cell_circulation(
-            self.ht * self._dual_edge_angles
-        )
-        magnetic_circulation *= self._inverse_dual_cell_solid_angles
-        magnetic_circulation *= self._inverse_radii
-
-        current_density = None
-        if self.source is not None and self._source_distribution is not None:
-            vertices, layers, weights = self._source_distribution
-            current_density = (
-                weights
-                * current_a
-                * self.source.vertical_element_length_m
-                * self._inverse_dual_cell_solid_angles[vertices, 0]
-                / self._radii[layers] ** 2
-                / self._radial_node_control_lengths[layers]
-            )
-
-        self.er *= self._ca_er
-        magnetic_circulation *= self._cb_er
-        self.er += magnetic_circulation
-        if current_density is not None:
-            vertices, layers, _ = self._source_distribution
-            coefficient_vertices = (
-                0
-                if self.config.compress_uniform_material_coefficients
-                else vertices
-            )
-            self.er[vertices, layers] -= (
-                self._cb_er[coefficient_vertices, layers] * current_density
-            )
-        if plasma_current is not None:
-            radial_plasma_current, tangential_plasma_current = plasma_current
-            self.er -= self._cb_er * radial_plasma_current
-
-        surface_gradient_hr = self.backend.dual_edge_difference(self.hr)
-        surface_gradient_hr *= self._inverse_dual_edge_angles
-        surface_gradient_hr *= self._inverse_radial_midpoints
-        radial_derivative_ht = self._radial_derivative_ht()
-        surface_gradient_hr -= radial_derivative_ht
-        del radial_derivative_ht
-        self.et *= self._ca_et
-        surface_gradient_hr *= self._cb_et
-        self.et += surface_gradient_hr
-        if self._tangential_source_distribution is not None:
-            edges, layers, weights = self._tangential_source_distribution
-            current_density = (
-                weights
-                * current_a
-                * self._inverse_dual_edge_angles[edges, 0]
-                / self._radial_midpoints[layers]
-                / self._radial_steps[layers]
-            )
-            coefficient_edges = (
-                0 if self.config.compress_uniform_material_coefficients else edges
-            )
-            self.et[edges, layers] -= (
-                self._cb_et[coefficient_edges, layers] * current_density
-            )
-        if plasma_current is not None:
-            self.et -= self._cb_et * tangential_plasma_current
+        self._set_torch_field_state(state)
 
     def diagnostics(self) -> dict[str, float | int | str]:
         """Return inexpensive scalar diagnostics without saving field data."""
@@ -1665,9 +1505,9 @@ class GeodesicFDTD:
             "time_s": self.time_s,
             "electric_time_s": self.electric_time_s,
             "magnetic_time_s": self.magnetic_time_s,
-            "backend": self.backend.name,
-            "device": self.backend.device,
-            "dtype": self.backend.dtype_name,
+            "runtime": "torch",
+            "device": str(self._runtime.device),
+            "dtype": self._runtime.dtype_name,
             "compiled": self.compiled,
             "compile_chunk_size": self.compile_chunk_size,
             "radial_boundary_condition": self.config.radial_boundary_condition,
@@ -1692,11 +1532,11 @@ class GeodesicFDTD:
             "cfl_time_step_limit_s": self.cfl_time_step_limit_s,
             "courant_factor": self.config.courant_factor,
             "field_memory_bytes": self.memory_bytes,
-            "persistent_backend_bytes": self.persistent_backend_bytes,
-            "max_abs_er_v_m": self.backend.max_abs(self.er),
-            "max_abs_et_v_m": self.backend.max_abs(self.et),
-            "max_abs_hr_a_m": self.backend.max_abs(self.hr),
-            "max_abs_ht_a_m": self.backend.max_abs(self.ht),
+            "persistent_runtime_bytes": self.persistent_runtime_bytes,
+            "max_abs_er_v_m": self._runtime.export_max_abs(self.er),
+            "max_abs_et_v_m": self._runtime.export_max_abs(self.et),
+            "max_abs_hr_a_m": self._runtime.export_max_abs(self.hr),
+            "max_abs_ht_a_m": self._runtime.export_max_abs(self.ht),
         }
 
     @property
@@ -1712,28 +1552,39 @@ class GeodesicFDTD:
         return (self.steps - 0.5) * self.time_step_s
 
     @property
+    def runtime(self) -> str:
+        """Return constant provenance for the PyTorch-only compute runtime."""
+
+        return "torch"
+
+    @property
     def device(self) -> Any:
         """Return the canonical compute device for this simulation."""
 
-        runtime = getattr(self.backend, "_runtime", None)
-        return runtime.device if runtime is not None else self.backend.device
+        return self._runtime.device
 
     @property
     def dtype(self) -> Any:
         """Return the canonical compute dtype for this simulation."""
 
-        return self.backend.dtype
+        return self._runtime.dtype
+
+    @property
+    def dtype_name(self) -> str:
+        """Return the configured floating-point dtype name."""
+
+        return self._runtime.dtype_name
 
     @property
     def threads(self) -> int | None:
         """Return the active CPU tensor thread count, when applicable."""
 
-        return self.backend.threads
+        return self._runtime.threads
 
     def to_numpy(self, values: Any) -> NDArray[np.generic]:
         """Detach values at a terminal host analysis or plotting boundary."""
 
-        return self.backend.to_numpy(values)
+        return self._runtime.export_numpy(values)
 
     def field_value(self, field: str, *indices: int) -> float:
         """Read one field value without exposing backend scalar semantics."""
@@ -1744,7 +1595,7 @@ class GeodesicFDTD:
             raise ValueError("field must be er, et, hr, or ht") from error
         if field not in {"er", "et", "hr", "ht"}:
             raise ValueError("field must be er, et, hr, or ht")
-        return self.backend.scalar(values[indices])
+        return self._runtime.export_scalar(values[indices])
 
     @staticmethod
     def _validated_count(value: int, label: str, *, minimum: int) -> int:
@@ -1805,10 +1656,10 @@ class GeodesicFDTD:
         if not np.allclose(sample_weights.sum(axis=1), 1.0):
             raise ValueError("observation weights must sum to one")
 
-        backend_vertices = self.backend.index_array(vertices)
-        backend_layers = self.backend.index_array(layers)
-        backend_weights = self.backend.asarray(sample_weights)
-        traces = self.backend.zeros((steps + 1, vertices.shape[0]))
+        backend_vertices = self._runtime.index_tensor(vertices)
+        backend_layers = self._runtime.index_tensor(layers)
+        backend_weights = self._runtime.as_tensor(sample_weights)
+        traces = self._runtime.zeros((steps + 1, vertices.shape[0]))
 
         def sample(row: int) -> None:
             selected = self.er[backend_vertices, backend_layers[:, None]]
@@ -1822,9 +1673,9 @@ class GeodesicFDTD:
             self.time_s = self.steps * self.time_step_s
             sample(offset + 1)
             if synchronize_every and (offset + 1) % synchronize_every == 0:
-                self.backend.synchronize()
+                self._runtime.synchronize()
         if synchronize_every is not None:
-            self.backend.synchronize()
+            self._runtime.synchronize()
         return traces
 
     def record_h_observations(
@@ -1888,12 +1739,12 @@ class GeodesicFDTD:
         ):
             raise ValueError("observation weights must be finite")
 
-        backend_faces = self.backend.index_array(faces)
-        backend_face_layers = self.backend.index_array(face_layers)
-        backend_radial_weights = self.backend.asarray(radial_weights)
-        backend_edges = self.backend.index_array(edges)
-        backend_edge_layers = self.backend.index_array(edge_layers)
-        backend_tangential_weights = self.backend.asarray(tangential_weights)
+        backend_faces = self._runtime.index_tensor(faces)
+        backend_face_layers = self._runtime.index_tensor(face_layers)
+        backend_radial_weights = self._runtime.as_tensor(radial_weights)
+        backend_edges = self._runtime.index_tensor(edges)
+        backend_edge_layers = self._runtime.index_tensor(edge_layers)
+        backend_tangential_weights = self._runtime.as_tensor(tangential_weights)
         sample_steps = np.concatenate(
             (
                 np.arange(0, steps + 1, sample_every, dtype=np.int64),
@@ -1901,8 +1752,8 @@ class GeodesicFDTD:
             )
         )
         sample_steps = np.unique(sample_steps)
-        radial_traces = self.backend.zeros((len(sample_steps), faces.shape[0]))
-        tangential_traces = self.backend.zeros((len(sample_steps), edges.shape[0]))
+        radial_traces = self._runtime.zeros((len(sample_steps), faces.shape[0]))
+        tangential_traces = self._runtime.zeros((len(sample_steps), edges.shape[0]))
         step_currents = self._source_currents(steps, currents=currents)
 
         def sample(row: int) -> None:
@@ -1930,9 +1781,9 @@ class GeodesicFDTD:
             sample(row)
             previous_step = target
             if synchronize_every and target % synchronize_every == 0:
-                self.backend.synchronize()
+                self._runtime.synchronize()
         if synchronize_every is not None:
-            self.backend.synchronize()
+            self._runtime.synchronize()
         return radial_traces, tangential_traces
 
     @property
@@ -1940,13 +1791,13 @@ class GeodesicFDTD:
         """Bytes occupied by the four evolving field arrays."""
 
         return sum(
-            self.backend.nbytes(field)
+            self._runtime.nbytes(field)
             for field in (self.er, self.et, self.hr, self.ht)
         )
 
     @property
-    def persistent_backend_bytes(self) -> int:
-        """Bytes in persistent field, coefficient, metric, and topology arrays."""
+    def persistent_runtime_bytes(self) -> int:
+        """Bytes in persistent field, coefficient, metric, and topology tensors."""
 
         solver_names = (
             "er",
@@ -1982,9 +1833,9 @@ class GeodesicFDTD:
         )
         arrays = [getattr(self, name) for name in solver_names]
         arrays.extend(
-            getattr(self.backend, name)
+            getattr(self._runtime, name)
             for name in backend_names
-            if hasattr(self.backend, name)
+            if hasattr(self._runtime, name)
         )
         for distribution in (
             self._source_distribution,
@@ -1993,7 +1844,7 @@ class GeodesicFDTD:
             if distribution is not None:
                 arrays.extend(distribution)
         unique = {id(array): array for array in arrays}
-        total = sum(self.backend.nbytes(array) for array in unique.values())
+        total = sum(self._runtime.nbytes(array) for array in unique.values())
         if self._surface_impedance_ade is not None:
             total += self._surface_impedance_ade.persistent_bytes
         if self._plasma_coupler is not None:

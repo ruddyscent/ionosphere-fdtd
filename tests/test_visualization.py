@@ -186,7 +186,7 @@ def test_live_surface_advances_and_updates_without_rendering(
                 self.callback(frame)
 
     surface_index = int(np.argmin(np.abs(simulation.altitudes_m)))
-    initial = simulation.er[:, surface_index].copy()
+    initial = simulation.to_numpy(simulation.er[:, surface_index]).copy()
     dataset = FakeDataset(initial)
     monkeypatch.setattr(
         visualization,
@@ -214,7 +214,7 @@ def test_live_surface_advances_and_updates_without_rendering(
     assert simulation.steps == starting_step + 6
     assert dataset.modified == 2
     assert np.allclose(
-        dataset.cell_data["Er (V/m)"], simulation.er[:, surface_index]
+        dataset.cell_data["Er (V/m)"], simulation.to_numpy(simulation.er[:, surface_index])
     )
     assert plotter.actor.mapper.scalar_range[0] < 0.0
     assert "simulation step" not in plotter.text
