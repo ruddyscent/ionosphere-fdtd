@@ -9,16 +9,18 @@ from typing import Any
 
 
 COLORS = {
-    "numpy-eager": "#4c78a8",
     "torch-cpu-eager": "#f58518",
     "cuda-eager": "#54a24b",
     "cuda-compiled": "#e45756",
+    "mps-eager": "#4c78a8",
+    "mps-compiled": "#b279a2",
 }
 LABELS = {
-    "numpy-eager": "NumPy CPU",
     "torch-cpu-eager": "Torch CPU",
     "cuda-eager": "CUDA eager",
     "cuda-compiled": "CUDA compiled (chunk 32)",
+    "mps-eager": "MPS eager",
+    "mps-compiled": "MPS compiled (chunk 32)",
 }
 
 
@@ -26,7 +28,11 @@ def load_results(paths: tuple[Path, ...]) -> list[dict[str, Any]]:
     results = []
     for path in paths:
         results.extend(json.loads(path.read_text())["results"])
-    return [result for result in results if result["status"] == "ok"]
+    return [
+        result
+        for result in results
+        if result["status"] == "ok" and result.get("workload", "bare") == "bare"
+    ]
 
 
 def _series_key(result: dict[str, Any]) -> str:
@@ -119,8 +125,8 @@ def _setup_plot(results: list[dict[str, Any]], output: Path) -> None:
                     key=lambda result: result["subdivision"],
                 )
                 metric = (
-                    "compile_seconds"
-                    if key == "cuda-compiled"
+                    "cold_compile_seconds"
+                    if key.endswith("-compiled")
                     else "initialization_seconds"
                 )
                 points = [
@@ -130,8 +136,8 @@ def _setup_plot(results: list[dict[str, Any]], output: Path) -> None:
                 ]
                 if points:
                     label = (
-                        "CUDA cold compile"
-                        if key == "cuda-compiled"
+                        f"{LABELS[key]} cold compile"
+                        if key.endswith("-compiled")
                         else f"{LABELS[key]} initialization"
                     )
                     axis.plot(
@@ -174,18 +180,18 @@ def main(argv: list[str] | None = None) -> int:
     results = load_results(tuple(args.inputs))
     _faceted_plot(
         results,
-        args.output_directory / "backend-scaling-throughput.png",
+        args.output_directory / "runtime-scaling-throughput.png",
         metric="steps_per_second",
         ylabel="Steady-state steps/s",
-        title="Backend steady-state throughput by problem size",
+        title="PyTorch steady-state throughput by problem size",
     )
-    _setup_plot(results, args.output_directory / "backend-scaling-setup-time.png")
+    _setup_plot(results, args.output_directory / "runtime-scaling-setup-time.png")
     _faceted_plot(
         results,
-        args.output_directory / "backend-scaling-persistent-memory.png",
+        args.output_directory / "runtime-scaling-persistent-memory.png",
         metric="persistent_memory_bytes",
         ylabel="Persistent solver memory (GiB)",
-        title="Persistent backend memory by problem size",
+        title="Persistent runtime memory by problem size",
         value_transform=lambda value: value / 2**30,
     )
     return 0

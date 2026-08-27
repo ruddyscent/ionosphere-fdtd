@@ -94,7 +94,7 @@ execution as separate experiments.
 Run the standardized device matrix:
 
 ```bash
-uv run python -m benchmarks.backend_matrix \
+uv run python -m benchmarks.runtime_matrix \
   --subdivision 2 --radial-cells 16 \
   --steps 200 --warmup-steps 20 --repeats 3 \
   --dtype float32 --torch-compile --torch-compile-chunk-size 8
@@ -102,5 +102,5 @@ uv run python -m benchmarks.backend_matrix \
 
 The benchmark excludes setup and transfers from the timed region and
 synchronizes CUDA/MPS before stopping the clock. See
-[the backend comparison](../benchmarks/backend-comparison.md) for the full
+[the runtime matrix](../benchmarks/pytorch-runtime-matrix.md) for the full
 method and reference run.

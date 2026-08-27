@@ -146,6 +146,8 @@ def _simulation(
     dtype: str,
     device: str,
     physics: str,
+    compile_step: bool = False,
+    compile_chunk_size: int = 8,
 ) -> GeodesicFDTD:
     config = SimulationConfig(
         subdivision=subdivision,
@@ -171,6 +173,8 @@ def _simulation(
         plasma=plasma,
         device=device,
         dtype=dtype,
+        compile_step=compile_step,
+        compile_chunk_size=compile_chunk_size,
     )
 
 

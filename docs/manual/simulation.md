@@ -215,9 +215,9 @@ surface resolution; pass the resulting mesh explicitly to `GeodesicFDTD`.
 values = simulation.diagnostics()
 print(values["cfl_time_step_limit_s"])
 print(values["field_memory_bytes"])
-print(simulation.persistent_backend_bytes)
+print(simulation.persistent_runtime_bytes)
 ```
 
-`memory_bytes` counts the four evolving fields. `persistent_backend_bytes`
+`memory_bytes` counts the four evolving fields. `persistent_runtime_bytes`
 also includes material coefficients, geometry, topology, and any surface ADE
 state resident on the selected backend.

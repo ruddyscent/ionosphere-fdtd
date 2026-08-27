@@ -1,37 +1,87 @@
-# Backend Performance Comparison
+# PyTorch Runtime Verification Matrix
 
 ## Scope
 
-This benchmark compares the same production `GeodesicFDTD.step()` workload on
-the supported array backends and devices:
+The maintained benchmark measures the PyTorch-only runtime across device,
+dtype, eager/compiled mode, and workload. Live rows use:
 
-| Implementation | Device | Availability |
-|---|---|---|
-| NumPy | CPU | Required |
-| PyTorch | CPU | Optional `pytorch` dependency |
-| PyTorch | NVIDIA CUDA GPU | Requires a CUDA-enabled PyTorch runtime |
-| PyTorch | Apple Metal (MPS) | Requires Apple silicon/macOS and an MPS-enabled runtime |
+| Runtime | Device | Dtypes | Availability |
+|---|---|---|---|
+| PyTorch | CPU | `float32`, `float64` | Required |
+| PyTorch | NVIDIA CUDA | `float32`, `float64` | CUDA-enabled PyTorch |
+| PyTorch | Apple Metal (MPS) | `float32` | Apple silicon/macOS |
 
-NumPy does not provide a GPU backend. Apple Metal is exposed through PyTorch's
-`mps` device. MPS supports `float32` fields but not `float64` in this solver.
+The scaling defaults are the agreed s2/r16, s4/r40, s6/r80, and s7/r80
+production shapes, both dtypes, and three synchronized repeats. Bare
+`GeodesicFDTD.step()` throughput is reported separately from end-to-end
+source/receiver, diagnostics/checkpoint, surface-impedance, and plasma
+workloads.
 
 ## Method
 
-Each row uses identical mesh dimensions, radial cells, initial pseudo-random
-fields, dtype, warm-up steps, measured steps, and repeat count. Setup and data
-transfer are excluded from timed regions. CUDA and MPS are synchronized before
-the timer stops. The primary metric is
+Each comparable row uses identical mesh dimensions, radial cells, initial
+pseudo-random fields, dtype, mode, workload, warm-up steps, measured steps,
+and repeat count. CUDA and MPS are synchronized before the timer stops. The
+primary metric is
 
 $$
 \text{throughput}=\frac{N_{\mathrm{steps}}}{t_{\mathrm{median}}}.
 $$
 
-Field memory is the sum of the four backend-native arrays
-$E_r$, $E_t$, $H_r$, and $H_t$; framework caches and compiled graphs are not
-included. Results from different dtypes or mesh sizes must not be placed in the
-same comparison table.
+The schema records initialization, cold chunk compilation, first remainder
+graph compilation, every synchronized repeat, median throughput, persistent
+tensor memory, process high-water RSS, and CUDA peak allocation. Results from
+different devices, dtypes, modes, workloads, or mesh sizes are not
+interchangeable.
 
-## Reference run
+## 2026-08-27 PyTorch-only verification run
+
+The checked-in live matrix was measured on Linux with PyTorch 2.13.0+cu130
+and an NVIDIA GeForce RTX 3060. Every row used 32 measured steps, 32 warm-up
+steps, and three synchronized repeats. Compiled rows used a cold cache and a
+32-step chunk.
+
+| Grid | Dtype | CUDA eager | CUDA compiled |
+|---|---|---:|---:|
+| s2 / r16 | `float32` | 1010.2 | 34630.0 |
+| s2 / r16 | `float64` | 1018.5 | 32008.0 |
+| s4 / r40 | `float32` | 951.7 | 12892.4 |
+| s4 / r40 | `float64` | 551.9 | 2549.0 |
+| s6 / r80 | `float32` | 82.0 | 508.0 |
+| s6 / r80 | `float64` | 41.6 | 100.7 |
+| s7 / r80 | `float32` | 20.7 | 127.5 |
+| s7 / r80 | `float64` | 10.5 | 25.1 |
+
+Values are steady-state steps/s. Cold chunk compilation took 45.1--56.0
+seconds and first remainder-graph compilation took 1.66--2.15 seconds.
+The complete record, including persistent tensor, peak process, and peak CUDA
+memory, is
+[`pytorch-runtime-matrix-rtx3060.json`](../../artifacts/benchmarks/pytorch-runtime-matrix-rtx3060.json).
+
+The like-for-like pre-migration comparison uses the longer historical method
+(256 measured steps and 64 warm-up steps). The agreed s4/r40 `float32`
+eager and compiled cases reached 1.054 and 1.132 times their historical
+throughput while retaining exactly the same persistent tensor memory, so both
+are within the 5% threshold. The machine-readable comparison also preserves
+the non-gating s2/r16 and `float64` results, including slower measurements,
+rather than hiding variance:
+[`pytorch-runtime-baseline-rtx3060.json`](../../artifacts/benchmarks/pytorch-runtime-baseline-rtx3060.json).
+
+The end-to-end s2/r16 `float32` run records CPU and CUDA bare-loop,
+source/receiver, diagnostics/checkpoint, surface-impedance, and plasma
+throughput separately. All ten available rows completed three synchronized
+repeats; all five MPS rows are explicitly unavailable on this Linux host.
+The complete timings and memory records are
+[`pytorch-runtime-end-to-end-s2-r16-float32.json`](../../artifacts/benchmarks/pytorch-runtime-end-to-end-s2-r16-float32.json).
+
+## Historical pre-migration evidence
+
+The JSON artifacts whose names contain `backend`, NumPy rows below, and
+native-fast-path prototype results are immutable historical evidence. They
+remain available to audit the migration but are not produced by a live NumPy
+runtime and do not describe a supported selector.
+
+### 2026-08-14 reference run
 
 The repository includes a 2026-08-14 eager `float32` reference run on Linux
 x86-64 with NumPy 2.5.1 and PyTorch 2.13.0+cu130. The intentionally small
@@ -49,7 +99,7 @@ the table must not be generalized to production subdivisions. The complete
 machine-readable record is
 [`artifacts/benchmarks/backend-matrix-float32.json`](../../artifacts/benchmarks/backend-matrix-float32.json).
 
-## Compiled chunk sweep on CUDA
+### Compiled chunk sweep on CUDA
 
 A 2026-08-15 follow-up measured the multi-step compiled graph introduced after
 the eager reference run. The sweep retained the subdivision-2, 16-radial-cell,
@@ -85,7 +135,7 @@ and
 This benchmark has no source or observation consumer, so it isolates field-step
 batching; it does not measure source-current transfer or observation sampling.
 
-## Native fast-path prototype decision
+### Native fast-path prototype decision
 
 The 2026-08-22 experiment built a PyTorch-native stepper prototype with
 preweighted incidence tables and four reusable full-field workspaces. It also
@@ -165,34 +215,36 @@ Pass `--physics surface-impedance` or `--physics plasma` to audit those paths
 with deterministic synthetic inputs. The historical native inventory is
 retained for the decision record but is not a maintained execution mode.
 
-## Reproduction
+## Live reproduction
 
-Run an eager `float32` comparison:
+Run every end-to-end workload on one grid in eager mode:
 
 ```bash
-python -m benchmarks.backend_matrix \
+python -m benchmarks.runtime_matrix \
   --subdivision 2 \
   --radial-cells 16 \
-  --steps 200 \
-  --warmup-steps 20 \
+  --steps 32 \
+  --warmup-steps 32 \
   --repeats 3 \
   --dtype float32 \
-  --output artifacts/benchmarks/backend-matrix-float32.json
+  --workloads bare,source-observation,diagnostics-checkpoint,surface-impedance,plasma \
+  --output artifacts/benchmarks/pytorch-runtime-end-to-end.json
 ```
 
-Measure PyTorch compilation separately:
+Measure compiled chunk and remainder graphs separately:
 
 ```bash
-python -m benchmarks.backend_matrix \
+python -m benchmarks.runtime_matrix \
   --subdivision 2 \
   --radial-cells 16 \
-  --steps 200 \
-  --warmup-steps 20 \
+  --steps 32 \
+  --warmup-steps 32 \
   --repeats 3 \
   --dtype float32 \
   --torch-compile \
-  --torch-compile-chunk-size 8 \
-  --output artifacts/benchmarks/backend-matrix-compiled-float32.json
+  --torch-compile-chunk-size 32 \
+  --workloads bare \
+  --output artifacts/benchmarks/pytorch-runtime-compiled.json
 ```
 
 Unavailable devices are recorded as `unavailable`, not silently omitted. Run
@@ -207,32 +259,37 @@ Use the isolated-worker scaling benchmark for crossover analysis across mesh
 and radial sizes:
 
 ```bash
-uv run python -m benchmarks.backend_scaling \
-  --subdivisions 2,3,4,5,6,7 \
-  --radial-cells-list 16,40,80 \
+uv run python -m benchmarks.runtime_scaling \
+  --grids 2:16,4:40,6:80,7:80 \
   --dtypes float32,float64 \
-  --implementations numpy,torch-cpu,cuda,mps \
+  --implementations torch-cpu,cuda,mps \
   --modes eager,compiled \
+  --workloads bare \
   --steps 32 \
   --warmup-steps 32 \
   --repeats 3 \
   --torch-compile-chunk-size 32 \
-  --output artifacts/benchmarks/backend-scaling.json
+  --baseline artifacts/benchmarks/torch-fast-path-2026-08-22.json \
+  --output artifacts/benchmarks/pytorch-runtime-scaling.json
 ```
 
 Each case runs in a fresh process. This makes process peak resident memory
 comparable between cases and prevents an out-of-memory exit or timeout from
 discarding the rest of the sweep. Results are written atomically after every
 case and `--resume` is enabled by default. Compiled cases use a fresh
-TorchInductor cache by default, so `compile_seconds` measures a cold first
-chunk; pass `--no-cold-compile` to study cache reuse instead.
+TorchInductor cache by default, so `cold_compile_seconds` measures a cold
+first chunk and `remainder_compile_seconds` measures the first single-step
+remainder graph; pass `--no-cold-compile` to study cache reuse instead.
 
 The scaling schema separates:
 
 - `initialization_seconds`: solver construction, initial field upload, and
   device synchronization;
-- `compile_seconds`: the first synchronized compiled chunk, including its
-  execution, or `null` for eager cases;
+- `cold_compile_seconds`: the first synchronized compiled chunk, including
+  its execution, or `null` for eager cases;
+- `remainder_compile_seconds`: the first synchronized single-step graph,
+  including its execution, or `null` for eager cases;
+- `repeat_seconds`: all synchronized repeats used to select the median;
 - `steps_per_second`: median synchronized steady-state throughput after
   compilation and warm-up;
 - `peak_process_memory_bytes`: the worker process high-water resident set;
@@ -245,7 +302,7 @@ MPS does not support this solver's `float64` mode and is recorded as
 `timeout`, allowing large subdivision-7 cases to fail explicitly rather than
 stalling or truncating the complete matrix.
 
-## Production-size results
+## Historical production-size results
 
 The 2026-08-15 Linux run used an RTX 3060 12 GB, PyTorch 2.13.0+cu130,
 NumPy 2.5.1, 32 measured steps, 32 warm-up steps, and three repeats. All 108
@@ -295,9 +352,9 @@ and
   isolate the multi-step graph from the single-step remainder graph.
 - Sweep chunk sizes on the target hardware; larger graphs reduce dispatch but
   cost more to compile and need not be faster for every grid.
-- Use `float32` for a four-device comparison. Use a separate `float64` run for
-  NumPy CPU, PyTorch CPU, and CUDA; MPS will be unavailable.
+- Use `float32` for a CPU/CUDA/MPS comparison. Use a separate `float64` run
+  for CPU and CUDA; MPS will be unavailable.
 - Increase subdivision and step count for accelerator studies so kernel time
   dominates Python and launch overhead.
 - Benchmark results measure performance only. Solver correctness remains owned
-  by pytest and the analytic verification report.
+  by pytest and the three canonical verification reports.

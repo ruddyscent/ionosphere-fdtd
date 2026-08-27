@@ -90,7 +90,7 @@ geographic coordinate or altitude, and each plotted sample is read as a host
 scalar. This simple path is intended for inspection. For accelerator-resident
 weighted sampling, construct explicit support indices and weights and use
 `record_er_observations()` or `record_h_observations()`. Those methods return
-backend-native trace buffers without detaching them. Call
+runtime-native trace buffers without detaching them. Call
 `simulation.to_numpy(traces)` once at the terminal plotting or artifact
 boundary; this is the explicit device synchronization and host-copy boundary.
 
@@ -107,7 +107,7 @@ section = sample_radial_section(
 )
 ```
 
-Call `simulation.to_numpy(field)` before passing backend-native arrays to other
+Call `simulation.to_numpy(field)` before passing runtime-native arrays to other
 host plotting or serialization libraries.
 
 ## Portable checkpoint files

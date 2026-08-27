@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from benchmarks.backend_matrix import _measure
+from benchmarks.runtime_matrix import WORKLOADS, _measure
 
 
 IMPLEMENTATIONS = ("torch-cpu", "cuda", "mps")
@@ -23,21 +23,21 @@ MODES = ("eager", "compiled")
 
 
 def benchmark_cases(
-    subdivisions: tuple[int, ...],
-    radial_cells: tuple[int, ...],
+    grids: tuple[tuple[int, int], ...],
     dtypes: tuple[str, ...],
     implementations: tuple[str, ...],
     modes: tuple[str, ...],
+    workloads: tuple[str, ...] = ("bare",),
 ) -> list[dict[str, Any]]:
     """Return deterministic, de-duplicated worker configurations."""
 
     cases = []
-    for subdivision in subdivisions:
-        for radial in radial_cells:
-            for dtype in dtypes:
-                for implementation in implementations:
-                    device = _device(implementation)
-                    for mode in modes:
+    for subdivision, radial in grids:
+        for dtype in dtypes:
+            for implementation in implementations:
+                device = _device(implementation)
+                for mode in modes:
+                    for workload in workloads:
                         cases.append(
                             {
                                 "subdivision": subdivision,
@@ -46,6 +46,7 @@ def benchmark_cases(
                                 "implementation": implementation,
                                 "device": device,
                                 "mode": mode,
+                                "workload": workload,
                             }
                         )
     return cases
@@ -60,9 +61,13 @@ def _device(implementation: str) -> str:
 
 
 def _case_key(case: dict[str, Any]) -> tuple[Any, ...]:
-    return tuple(
-        case[name]
-        for name in ("subdivision", "radial_cells", "dtype", "implementation", "mode")
+    return (
+        case["subdivision"],
+        case["radial_cells"],
+        case["dtype"],
+        case["implementation"],
+        case["mode"],
+        case.get("workload", "bare"),
     )
 
 
@@ -77,6 +82,7 @@ def _worker_result(args: argparse.Namespace) -> dict[str, Any]:
         dtype=args.dtype,
         compile_step=args.mode == "compiled",
         compile_chunk_size=args.torch_compile_chunk_size,
+        workload=args.workload,
     )
     payload = asdict(result)
     payload.update(
@@ -95,10 +101,13 @@ def _failed_result(
         **case,
         "compiled": case["mode"] == "compiled",
         "compile_chunk_size": chunk_size,
+        "device_name": None,
         "status": status,
         "initialization_seconds": None,
-        "compile_seconds": None,
+        "cold_compile_seconds": None,
+        "remainder_compile_seconds": None,
         "median_seconds": None,
+        "repeat_seconds": None,
         "steps_per_second": None,
         "field_memory_bytes": None,
         "persistent_memory_bytes": None,
@@ -108,13 +117,84 @@ def _failed_result(
     }
 
 
+def compare_pre_migration_baseline(
+    results: list[dict[str, Any]],
+    baseline: dict[str, Any],
+    *,
+    tolerance: float = 0.05,
+) -> list[dict[str, Any]]:
+    """Compare like-for-like bare Torch rows with historical measurements."""
+
+    if not 0.0 <= tolerance < 1.0:
+        raise ValueError("tolerance must be in [0, 1)")
+    comparisons = []
+    for current in results:
+        if current.get("status") != "ok" or current.get("workload") != "bare":
+            continue
+        match = next(
+            (
+                candidate
+                for candidate in baseline.get("measurements", ())
+                if candidate.get("status") == "ok"
+                and _normalized_device_name(candidate.get("machine"))
+                == _normalized_device_name(current.get("device_name"))
+                and candidate.get("subdivision") == current.get("subdivision")
+                and candidate.get("radial_cells") == current.get("radial_cells")
+                and candidate.get("dtype") == current.get("dtype")
+                and candidate.get("mode") == current.get("mode")
+                and candidate.get("backend") == "torch"
+            ),
+            None,
+        )
+        if match is None:
+            continue
+        throughput_ratio = (
+            current["steps_per_second"] / match["steps_per_second"]
+        )
+        persistent_ratio = (
+            current["persistent_memory_bytes"] / match["persistent_memory_bytes"]
+        )
+        comparisons.append(
+            {
+                "subdivision": current["subdivision"],
+                "radial_cells": current["radial_cells"],
+                "dtype": current["dtype"],
+                "mode": current["mode"],
+                "device_name": current["device_name"],
+                "baseline_steps_per_second": match["steps_per_second"],
+                "current_steps_per_second": current["steps_per_second"],
+                "throughput_ratio": throughput_ratio,
+                "baseline_persistent_memory_bytes": match[
+                    "persistent_memory_bytes"
+                ],
+                "current_persistent_memory_bytes": current[
+                    "persistent_memory_bytes"
+                ],
+                "persistent_memory_ratio": persistent_ratio,
+                "within_tolerance": (
+                    throughput_ratio >= 1.0 - tolerance
+                    and abs(persistent_ratio - 1.0) <= tolerance
+                ),
+            }
+        )
+    return comparisons
+
+
+def _normalized_device_name(value: Any) -> str:
+    name = str(value or "")
+    for prefix in ("NVIDIA GeForce ", "NVIDIA "):
+        if name.startswith(prefix):
+            return name[len(prefix) :]
+    return name
+
+
 def _run_case(
     case: dict[str, Any], args: argparse.Namespace
 ) -> dict[str, Any]:
     command = [
         sys.executable,
         "-m",
-        "benchmarks.backend_scaling",
+        "benchmarks.runtime_scaling",
         "--worker",
         "--subdivision",
         str(case["subdivision"]),
@@ -128,6 +208,8 @@ def _run_case(
         case["device"],
         "--mode",
         case["mode"],
+        "--workload",
+        case["workload"],
         "--steps",
         str(args.steps),
         "--warmup-steps",
@@ -219,14 +301,36 @@ def _parse_csv(raw: str, cast: Any) -> tuple[Any, ...]:
     return values
 
 
+def _parse_grids(raw: str) -> tuple[tuple[int, int], ...]:
+    try:
+        grids = tuple(
+            tuple(int(value) for value in item.strip().split(":"))
+            for item in raw.split(",")
+            if item.strip()
+        )
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "grids must use subdivision:radial_cells pairs"
+        ) from error
+    if not grids or any(len(grid) != 2 or min(grid) < 1 for grid in grids):
+        raise argparse.ArgumentTypeError(
+            "grids must be positive subdivision:radial_cells pairs"
+        )
+    return grids
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--subdivisions", default="2,3,4,5,6,7")
-    parser.add_argument("--radial-cells-list", default="16,40,80")
+    parser.add_argument(
+        "--grids",
+        type=_parse_grids,
+        default=_parse_grids("2:16,4:40,6:80,7:80"),
+    )
     parser.add_argument("--dtypes", default="float32,float64")
     parser.add_argument("--implementations", default=",".join(IMPLEMENTATIONS))
     parser.add_argument("--modes", default=",".join(MODES))
+    parser.add_argument("--workloads", default="bare")
     parser.add_argument("--steps", type=int, default=32)
     parser.add_argument("--warmup-steps", type=int, default=32)
     parser.add_argument("--repeats", type=int, default=3)
@@ -237,12 +341,19 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--output", type=Path, required=False)
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="historical torch-fast-path JSON used for like-for-like comparison",
+    )
+    parser.add_argument("--baseline-tolerance", type=float, default=0.05)
     parser.add_argument("--subdivision", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--radial-cells", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--dtype", help=argparse.SUPPRESS)
     parser.add_argument("--implementation", help=argparse.SUPPRESS)
     parser.add_argument("--device", help=argparse.SUPPRESS)
     parser.add_argument("--mode", help=argparse.SUPPRESS)
+    parser.add_argument("--workload", help=argparse.SUPPRESS)
     return parser
 
 
@@ -259,35 +370,38 @@ def main(argv: list[str] | None = None) -> int:
     if args.output is None:
         parser.error("--output is required for a scaling sweep")
 
-    subdivisions = _parse_csv(args.subdivisions, int)
-    radial_cells = _parse_csv(args.radial_cells_list, int)
     dtypes = _parse_csv(args.dtypes, str)
     implementations = _parse_csv(args.implementations, str)
     modes = _parse_csv(args.modes, str)
+    workloads = _parse_csv(args.workloads, str)
     if any(value not in IMPLEMENTATIONS for value in implementations):
         parser.error(f"implementations must be drawn from {IMPLEMENTATIONS}")
     if any(value not in MODES for value in modes):
         parser.error(f"modes must be drawn from {MODES}")
+    if any(value not in WORKLOADS for value in workloads):
+        parser.error(f"workloads must be drawn from {WORKLOADS}")
     if any(value not in {"float32", "float64"} for value in dtypes):
         parser.error("dtypes must be float32 and/or float64")
 
     cases = benchmark_cases(
-        subdivisions, radial_cells, dtypes, implementations, modes
+        args.grids, dtypes, implementations, modes, workloads
     )
     payload: dict[str, Any] = {
+        "schema": "ionosphere-fdtd.pytorch-runtime-matrix.v1",
         "system": _system_information(),
         "configuration": {
-            "subdivisions": subdivisions,
-            "radial_cells": radial_cells,
+            "grids": args.grids,
             "dtypes": dtypes,
             "implementations": implementations,
             "modes": modes,
+            "workloads": workloads,
             "steps": args.steps,
             "warmup_steps": args.warmup_steps,
             "repeats": args.repeats,
             "torch_compile_chunk_size": args.torch_compile_chunk_size,
             "timeout_seconds": args.timeout_seconds,
             "cold_compile": args.cold_compile,
+            "baseline_tolerance": args.baseline_tolerance,
         },
         "results": [],
     }
@@ -301,11 +415,25 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"[{position}/{len(cases)}] "
             f"s{case['subdivision']} r{case['radial_cells']} "
-            f"{case['dtype']} {case['implementation']} {case['mode']}",
+            f"{case['dtype']} {case['implementation']} {case['mode']} "
+            f"{case['workload']}",
             file=sys.stderr,
             flush=True,
         )
         payload["results"].append(_run_case(case, args))
+        _write_payload(args.output, payload)
+    if args.baseline is not None:
+        baseline = json.loads(args.baseline.read_text())
+        payload["baseline"] = {
+            "path": str(args.baseline),
+            "schema": baseline.get("schema"),
+            "historical_only": True,
+            "comparisons": compare_pre_migration_baseline(
+                payload["results"],
+                baseline,
+                tolerance=args.baseline_tolerance,
+            ),
+        }
         _write_payload(args.output, payload)
     print(json.dumps(payload, indent=2))
     return 0

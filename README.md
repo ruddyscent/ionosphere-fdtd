@@ -90,7 +90,7 @@ print(simulation.diagnostics())
 - Verification: [analytic solutions](docs/verification/analytic-solution-benchmarks.md),
   [Simpson–Taflove 2004](docs/verification/simpson-taflove-2004.md), and
   [Simpson–Taflove 2006](docs/verification/simpson-taflove-2006.md)
-- [Runtime benchmarks](docs/benchmarks/backend-comparison.md)
+- [Runtime benchmarks](docs/benchmarks/pytorch-runtime-matrix.md)
 - [Refinement strategy](docs/benchmarks/refinement-strategy.md)
 - [Two-GPU scaling](docs/benchmarks/distributed-scaling.md)
 
