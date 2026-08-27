@@ -179,7 +179,7 @@ An ADE stores `terms * n_edges` scalar states. On a closed triangular mesh this
 cost is recovered after eliminating roughly six explicit underground radial
 cells; a skin-depth-resolving seawater or crust volume would require many more.
 Checkpoint version 3 preserves the ADE memory so a resumed run has no boundary
-transient. Single-backend compilation and the two-rank NCCL CUDA Graph path
+transient. PyTorch compilation and the two-rank NCCL CUDA Graph path
 both update the state in place.
 
 The solver computes a geometry- and material-aware CFL limit and rejects an
@@ -220,4 +220,4 @@ print(simulation.persistent_runtime_bytes)
 
 `memory_bytes` counts the four evolving fields. `persistent_runtime_bytes`
 also includes material coefficients, geometry, topology, and any surface ADE
-state resident on the selected backend.
+state resident on the selected device.

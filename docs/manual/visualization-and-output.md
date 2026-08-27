@@ -107,7 +107,7 @@ section = sample_radial_section(
 )
 ```
 
-Call `simulation.to_numpy(field)` before passing runtime-native arrays to other
+Call `simulation.to_numpy(field)` before passing Torch tensors to other
 host plotting or serialization libraries.
 
 ## Portable checkpoint files
@@ -125,13 +125,24 @@ restored = GeodesicFDTD.load_checkpoint(
 restored.step(5_000)
 ```
 
-The current format is version 4, and the loader accepts legacy versions 1–4.
-The archive contains JSON metadata, exact mesh topology and refinement
-metadata, all four evolving fields, the simulation clock, configuration,
-material, and source. Version 3 added surface-impedance ADE memory; version 4
-adds the mesh-bound plasma model and every species-current ADE state. Loading
-uses `allow_pickle=False`; checkpoint files never execute serialized Python
-objects.
+The current format is version 4, and the loader accepts legacy versions 1–4:
+
+| Version | Restart content added |
+|---:|---|
+| 1 | Configuration, material/source metadata, mesh vertices, clock, and four fields; topology is reconstructed |
+| 2 | Exact faces, refinement levels, and mesh topology metadata |
+| 3 | Surface-impedance model and ADE memory |
+| 4 | Mesh-bound plasma model and every species-current ADE state |
+
+Historical runtime/backend metadata is advisory. Loading always creates the
+current PyTorch runtime on the caller-selected `device` and `dtype`; no
+compatibility compute backend is revived. Loading uses `allow_pickle=False`,
+so checkpoint files never execute serialized Python objects.
+
+Saving copies fields and ADE state through the explicit detached NumPy archive
+boundary. A checkpoint preserves numeric restart state, not an autograd graph
+or trainable tensor overrides. Reloading therefore starts a new graph even when
+the field values and ADE state are exact.
 
 Checkpoint saving currently supports `EarthIonosphereMaterial` and optional
 `GaussianCurrent` or `TangentialGaussianCurrent` sources. Other runtime

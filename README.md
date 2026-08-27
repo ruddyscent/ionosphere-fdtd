@@ -1,16 +1,18 @@
 # Ionosphere geodesic FDTD
 
-`ionosphere-fdtd` is a NumPy and PyTorch implementation of a three-dimensional
+`ionosphere-fdtd` is a PyTorch implementation of a three-dimensional
 geodesic finite-difference time-domain model for the Earth–ionosphere
 waveguide. It combines an icosahedral primal/dual surface mesh with staggered
 radial Yee planes, conductive materials, localized current sources, receiver
-sampling, and two- and three-dimensional visualization.
+sampling, and two- and three-dimensional visualization. NumPy remains a
+required host-side dependency for mesh construction, portable artifacts, and
+scientific analysis; it is not a compute runtime.
 
 ![FDTD pulse propagation from Gwangju on the geodesic Earth-ionosphere grid](docs/verification/images/taflove-fig-3-11-gwangju.gif)
 
 ## Highlights
 
-- NumPy CPU and PyTorch CPU, CUDA, and Apple Metal/MPS backends
+- PyTorch CPU, NVIDIA CUDA, and Apple Metal/MPS execution
 - Full-spherical radial curls and conservative CFL selection
 - Exponential conductive integration with a legacy trapezoidal option
 - Static conforming surface and 2:1-balanced radial refinement
@@ -30,7 +32,9 @@ uv sync
 uv run ionosphere --steps 200
 ```
 
-This first CPU run requires no optional plotting packages. It prints
+PyTorch is a required dependency and the default is CPU with `float64`
+fields. This first run requires no accelerator or optional plotting packages.
+It prints
 the selected mesh, stable time step, field memory, and finite field maxima.
 
 For repeatable runs, copy the CPU-safe starter configuration and edit it instead
@@ -41,7 +45,7 @@ cp configs/ionosphere.example.toml run.toml
 uv run ionosphere --config run.toml
 ```
 
-This starter remains on NumPy CPU and writes
+This starter remains on PyTorch CPU and writes
 `artifacts/runs/demo.npz`. Use
 [`configs/ionosphere.research.toml`](configs/ionosphere.research.toml) only
 after selecting and sizing the intended accelerator workload.
@@ -84,9 +88,10 @@ print(simulation.diagnostics())
 - [Command-line reference](docs/manual/command-line-reference.md)
 - [Simulation configuration](docs/manual/simulation.md)
 - [Materials and sources](docs/manual/materials-and-sources.md)
-- [Backends and performance](docs/manual/backends.md)
+- [Runtime and performance](docs/manual/backends.md)
 - [Visualization and output](docs/manual/visualization-and-output.md)
 - [Troubleshooting](docs/manual/troubleshooting.md)
+- [PyTorch-only migration and 0.2.0 release notes](docs/manual/pytorch-only-migration.md)
 - Verification: [analytic solutions](docs/verification/analytic-solution-benchmarks.md),
   [Simpson–Taflove 2004](docs/verification/simpson-taflove-2004.md), and
   [Simpson–Taflove 2006](docs/verification/simpson-taflove-2006.md)

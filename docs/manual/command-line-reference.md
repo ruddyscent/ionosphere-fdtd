@@ -26,6 +26,11 @@ generic two-rank construction. Paper-specific adaptive and distributed runners
 are source-only modules under `verification/` and are not installed console
 scripts.
 
+`--backend` was removed. PyTorch is the only compute runtime; select hardware
+with `--device` and precision with `--dtype`. The TOML `backend` key is
+also removed and is rejected with migration guidance. See the
+[0.2.0 migration table](pytorch-only-migration.md#old-to-new-reference).
+
 Run a preflight before a long job:
 
 ```bash
@@ -145,9 +150,10 @@ uv run ionosphere --resume run.npz --steps 5000 --checkpoint run.npz
 ```
 
 `--steps` always means additional steps. On resume, the checkpoint owns the
-grid, material, source, time step, and current step count. Backend options may
-be changed, so a NumPy checkpoint can be resumed with, for example,
-`--device cuda`. With `--dtype auto`, restart preserves the
+grid, material, source, time step, and current step count. Historical v1–v4
+checkpoints can be resumed on a caller-selected Torch device, for example
+`--device cuda`; their stored legacy backend metadata is advisory and does
+not select a removed runtime. With `--dtype auto`, restart preserves the
 stored dtype; an explicit `--dtype` converts fields to that precision.
 
 Checkpoint updates are atomic: the completed temporary archive replaces the
@@ -199,8 +205,8 @@ uv run --extra visualization ionosphere-visualize \
 ```
 
 The checkpoint owns the mesh, radial grid, material, source, time step, and
-current field state. Backend, device, dtype, and compilation options may be
-changed while loading. For `traces`, `--trace-steps` advances from the saved
+current field state. Device, dtype, and compilation options may be changed
+while loading. For `traces`, `--trace-steps` advances from the saved
 state and records new samples; checkpoints do not contain historical receiver
 traces.
 

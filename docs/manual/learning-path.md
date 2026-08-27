@@ -39,7 +39,7 @@ receiver support that the model must resolve. Then run
 uv run ionosphere --config run.toml --dry-run
 ```
 
-to validate the backend and see the exact field allocation before committing
+to validate the runtime/device and see the exact field allocation before committing
 to a long run. Refine horizontal and radial resolution independently and retain
 at least three levels when estimating convergence. A finer grid is not evidence
 of convergence by itself.
@@ -76,9 +76,9 @@ are supported and which remain information-limited.
 
 ## 6. Move to an accelerator last
 
-Once the CPU model and outputs are understood, compare backends on the intended
-grid. Use PyTorch CUDA or MPS only when the workload offsets framework and
+Once the CPU model and outputs are understood, compare PyTorch devices on the
+intended grid. Use CUDA or MPS only when the workload offsets framework and
 kernel-launch overhead. Compilation is intended for long fixed-shape runs and
 should be benchmarked separately from eager execution. See
-[Backends and Performance](backends.md) before using the research template or
+[Runtime and Performance](backends.md) before using the research template or
 the two-GPU runner.

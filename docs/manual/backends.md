@@ -1,4 +1,4 @@
-# Backends and Performance
+# Runtime and Performance
 
 ## Supported combinations
 
@@ -9,11 +9,13 @@
 | PyTorch | Metal/MPS | `float32` | `float64` is unsupported |
 
 `device="auto"` chooses CUDA, then MPS, then CPU. The `gpu` alias means CUDA.
+The API and CLI defaults are `device="cpu"` and `dtype="float64"`;
+accelerators and `float32` are explicit choices.
 
 ## CLI examples
 
 ```bash
-# NumPy CPU
+# PyTorch CPU with the default precision
 uv run ionosphere --device cpu --dtype float64 --steps 1000
 
 # PyTorch CPU with one intra-op thread
@@ -82,12 +84,33 @@ execution as separate experiments.
 ## Choosing a device
 
 - Use PyTorch CPU for installation checks, small grids, and transparent analysis.
-- Benchmark CPU for small and medium grids; framework overhead can exceed the
-  arithmetic saved by an accelerator.
+- Benchmark CPU for small and medium grids; framework and launch overhead can
+  exceed the arithmetic saved by an accelerator.
 - Use CUDA or MPS when the grid and step count are large enough to amortize
   kernel-launch overhead.
 - Use `float64` for quantitative verification. Use `float32` when memory and
   throughput matter and the resulting numerical tolerance is acceptable.
+
+The historical pre-migration s2/r16 `float32` measurement put PyTorch CPU at
+0.60 times the removed NumPy runtime. That is a documented migration cost, not
+a reason to expect every PyTorch workload to improve. On the RTX 3060 live
+matrix, eager CUDA becomes useful as the grid grows, while compiled CUDA
+delivers the largest steady-state gain on long fixed-shape runs. Cold chunk
+compilation took 45.1–56.0 seconds and the first remainder graph took
+1.66–2.15 seconds, so a short run should remain eager. See the
+[runtime matrix](../benchmarks/pytorch-runtime-matrix.md) for the exact cases,
+memory, and historical evidence.
+
+## Forward-only and differentiable execution
+
+Ordinary simulations are forward-only Torch computations. Trainable material,
+source-current, surface-impedance, and plasma coefficient tensors retain their
+autograd graphs through eager and compiled stepping. Keep receiver traces as
+Torch tensors while constructing a loss; `simulation.to_numpy(...)` is a
+detaching terminal export. Long horizons retain every state needed by backward
+and can exhaust memory, so optimize in bounded windows and detach or checkpoint
+only between windows where truncated gradients are scientifically acceptable.
+See [Materials and Sources](materials-and-sources.md#differentiable-material-parameters).
 
 ## Benchmarking
 

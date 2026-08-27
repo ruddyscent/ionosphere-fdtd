@@ -30,6 +30,7 @@ def test_shipped_example_is_cpu_safe_and_uses_one_demo_model() -> None:
     assert simulation.steps == 200
     assert visualization.steps == 0
     assert simulation.torch_compile is False
+    assert simulation.torch_compile_chunk_size == 8
     assert visualization.coastlines is False
     assert simulation.checkpoint == Path("artifacts/runs/demo.npz")
     assert visualization.resume == simulation.checkpoint

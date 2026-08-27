@@ -1,4 +1,4 @@
-# CPU-safe defaults for a first simulation and plot.
+# Required PyTorch runtime with CPU/float64-safe defaults for a first run.
 [ionosphere]
 steps = 200
 report_every = 20
@@ -9,6 +9,7 @@ courant = 0.35
 device = "cpu"
 dtype = "float64"
 torch_compile = false
+torch_compile_chunk_size = 8
 
 source_current = 1.0e6
 source_length = 5000.0

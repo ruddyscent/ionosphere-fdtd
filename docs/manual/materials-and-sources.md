@@ -99,7 +99,7 @@ optimization.
 
 ## Differentiable optional-physics coefficients
 
-The PyTorch backend can optimize discrete surface-impedance and magnetized-
+The PyTorch runtime can optimize discrete surface-impedance and magnetized-
 plasma ADE coefficients. Pass a static `surface_impedance` or `plasma` model as
 usual and override the coefficients used by the recurrence with
 `surface_impedance_tensors=SurfaceImpedanceCoefficientTensors(...)` or
@@ -137,6 +137,24 @@ Checkpoint files contain detached numeric field and ADE state values. They do
 not serialize the autograd graph or tensor coefficient overrides. A restored
 simulation therefore resumes the exact ADE state but requires new trainable
 coefficient tensors before continuing an optimization.
+
+### Gradient support and horizon policy
+
+| Target | Gradient support |
+|---|---|
+| Sampled `sigma`, `epsilon_r`, or direct `ca`/`cb` tensors | Supported |
+| Per-step source currents and `GaussianCurrent` peak override | Supported |
+| Surface-impedance and plasma discrete coefficient tensors | Supported |
+| Mesh topology, geographic classification, interpolation, file loading, and automatic CFL selection | Static; unsupported |
+| Stored scalar source location, waveform metadata, and receiver support selection | Static; unsupported |
+
+`record_er_observations()` and `record_h_observations()` return device-native
+Torch tensors. Construct the loss and call backward before any
+`simulation.to_numpy(...)` export. Autograd retains intermediate field and ADE
+states for the requested horizon, so memory grows with the number of
+differentiated steps. Use bounded optimization windows. Detaching state or
+saving/reloading a checkpoint between windows intentionally truncates the
+gradient and is valid only when that approximation is part of the model.
 
 ## Layered geographic material
 

@@ -29,9 +29,10 @@ current evidence and stopping boundary.
 4. [Command-line reference](command-line-reference.md)
 5. [Simulation configuration](simulation.md)
 6. [Materials and sources](materials-and-sources.md)
-7. [Backends and performance](backends.md)
+7. [Runtime and performance](backends.md)
 8. [Visualization and output](visualization-and-output.md)
 9. [Troubleshooting](troubleshooting.md)
+10. [PyTorch-only migration and 0.2.0 release notes](pytorch-only-migration.md)
 
 If this is your first run, stop after the Quick Start has produced both
 `demo.npz` and `demo-surface.png`. The Learning Path then explains which model
@@ -47,7 +48,7 @@ The project provides two installed commands:
 | `ionosphere` | Run a simulation and print scalar diagnostics |
 | `ionosphere-visualize` | Render maps, sections, meshes, animations, and receiver traces |
 
-The Python API exposes the same solver, mesh, material, source, backend, and
+The Python API exposes the same solver, mesh, material, source, runtime, and
 visualization objects through `ionosphere_fdtd`.
 
 The installed commands intentionally expose the compact data-free workflow.
@@ -58,8 +59,7 @@ the source-only `verification` package.
 
 ## Units and field layout
 
-All public values use SI units. The evolving arrays are runtime-native PyTorch
-arrays or PyTorch tensors:
+All public values use SI units. The evolving fields are PyTorch tensors:
 
 | Field | Shape association | Time |
 |---|---|---|

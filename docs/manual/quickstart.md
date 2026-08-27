@@ -6,11 +6,11 @@
 uv run ionosphere --steps 200
 ```
 
-The default uses NumPy CPU, subdivision 2, 24 radial cells, a Gwangju vertical
+The default uses PyTorch CPU, subdivision 2, 24 radial cells, a Gwangju vertical
 Gaussian current, and the data-free Earth–ionosphere material. Progress output
 includes simulation time and maximum electric and magnetic amplitudes.
 
-Expected setup output begins with a 162-cell surface mesh, NumPy on CPU,
+Expected setup output begins with a 162-cell surface mesh, PyTorch on CPU,
 `float64`, a field allocation of about 0.27 MiB, and a conservative time step.
 The exact field maxima depend on the requested step count.
 
@@ -104,14 +104,19 @@ The Simpson–Taflove paper-target grid is subdivision 7. Lower levels are usefu
 for smoke tests and controlled convergence sweeps, but they are not substitutes
 for the paper's stated surface-cell count.
 
-## Run with PyTorch
+## Choose a device and precision
 
-Let PyTorch select CUDA, MPS, or CPU:
+CPU and `float64` are the safe defaults. Select an accelerator and
+`float32` explicitly after validating the model on CPU:
 
 ```bash
 uv run ionosphere \
-  --device auto --steps 200
+  --device cuda --dtype float32 --steps 200
 ```
+
+`--device auto` probes CUDA, then MPS, then CPU, but it is not a performance
+planner. MPS supports `float32` only; requesting `float64` fails instead of
+silently changing precision.
 
 For a long, fixed-shape run, evaluate compilation separately:
 
@@ -149,7 +154,7 @@ print(simulation.diagnostics())
 er = simulation.to_numpy(simulation.er)
 ```
 
-`to_numpy()` is an explicit terminal boundary between runtime-native fields
-and host analysis code. For PyTorch fields it detaches the tensor from its
-autograd graph, moves it to CPU memory, and returns a NumPy array; do not use
-that exported array to construct a differentiable loss.
+`to_numpy()` is an explicit terminal boundary between Torch tensors and host
+analysis code. It detaches the tensor from its autograd graph, moves it to CPU
+memory, and returns a NumPy array; do not use that exported array to construct
+a differentiable loss.
