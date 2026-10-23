@@ -48,7 +48,7 @@ visualization = [
     "imageio>=2.36",
     "imageio-ffmpeg>=0.5",
     "matplotlib>=3.9",
-    "pillow>=11",
+    "pillow>=13.0.0",
     "pyvista>=0.45",
 ]
 verification = ["scipy>=1.15"]
